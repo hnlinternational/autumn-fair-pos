@@ -248,12 +248,25 @@ function rowToOrder(r){ return {id:r.id, no:r.no, items:r.items||[], total:r.tot
 var local = { orders: lsGet("pos.local.orders", []), cfg: lsGet("pos.local.cfg", null) };
 function saveLocal(){ lsSet("pos.local.orders", local.orders); lsSet("pos.local.cfg", local.cfg); }
 
+var sync = { since: null, resetAt: null, lastFull: 0, rows: {} };
 var store = REMOTE ? {
+  /* 데이터 절약: 평소엔 바뀐 주문만 받고, 1분마다 한 번 전체를 다시 받아요 */
   load: function(cb){
-    api("GET", "fair_orders?select=*&order=id.asc", null, function(err, rows){
-      if (err) return cb(err);
-      api("GET", "fair_config?select=*&id=eq.1", null, function(err2, cfg){
-        cb(null, map(rows||[], rowToOrder), (!err2 && cfg && cfg[0]) ? cfg[0] : null);
+    api("GET", "fair_config?select=menu,float_cash,reset_at&id=eq.1", null, function(err0, cfgRows){
+      if (err0) return cb(err0);
+      var cfg = cfgRows && cfgRows[0] ? cfgRows[0] : null;
+      var full = !sync.since || Date.now() - sync.lastFull > 60000 || (cfg && cfg.reset_at !== sync.resetAt);
+      var q = "fair_orders?select=*&order=id.asc";
+      if (!full) q += "&updated_at=gt." + encodeURIComponent(new Date(Date.parse(sync.since) - 5000).toISOString());
+      api("GET", q, null, function(err, rows){
+        if (err) return cb(err);
+        if (full){ sync.rows = {}; sync.lastFull = Date.now(); }
+        if (cfg) sync.resetAt = cfg.reset_at;
+        each(rows || [], function(r){ sync.rows[r.id] = r; if (!sync.since || r.updated_at > sync.since) sync.since = r.updated_at; });
+        if (!sync.since) sync.since = new Date().toISOString();
+        var list = map(keys(sync.rows), function(k){ return rowToOrder(sync.rows[k]); });
+        list.sort(function(a, b){ return a.id - b.id; });
+        cb(null, list, cfg);
       });
     });
   },
@@ -264,7 +277,7 @@ var store = REMOTE ? {
   },
   update: function(id, patch, cb){ api("PATCH", "fair_orders?id=eq." + encodeURIComponent(id), patch, function(err){ cb && cb(err); }, "return=minimal"); },
   setConfig: function(menu, floatCash, cb){ api("PATCH", "fair_config?id=eq.1", {menu:menu, float_cash:floatCash}, function(err){ cb && cb(err); }, "return=minimal"); },
-  reset: function(cb){ api("POST", "rpc/fair_reset", {}, function(err){ cb && cb(err); }); }
+  reset: function(cb){ api("POST", "rpc/fair_reset", {}, function(err){ if (!err){ sync.since = null; sync.rows = {}; } cb && cb(err); }); }
 } : {
   load: function(cb){ cb(null, local.orders.slice(), local.cfg); },
   add: function(o, cb){

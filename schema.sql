@@ -18,8 +18,11 @@ create table if not exists public.fair_config (
   id int primary key default 1 check (id = 1),
   menu jsonb not null,
   float_cash int not null default 0,
+  reset_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+alter table public.fair_config add column if not exists reset_at timestamptz not null default now();
+create index if not exists fair_orders_updated_idx on public.fair_orders(updated_at);
 
 create or replace function public.fair_touch() returns trigger language plpgsql as $$
 begin new.updated_at := now(); return new; end $$;
@@ -52,6 +55,7 @@ language plpgsql security definer set search_path = public as $$
 begin
   delete from public.fair_orders where true;
   perform setval('public.fair_order_no_seq', 1, false);
+  update public.fair_config set reset_at = now() where id = 1;
 end $$;
 revoke all on function public.fair_reset() from public;
 grant execute on function public.fair_reset() to anon, authenticated;
