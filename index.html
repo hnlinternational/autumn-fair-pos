@@ -236,7 +236,7 @@ var URL_BASE = (CFG.supabaseUrl || "").replace(/\/$/, "");
 var KEY = CFG.supabaseKey || "";
 var REMOTE = !!(URL_BASE && KEY);
 var POLL_MS = 2000;
-var APP_VERSION = "202610291934"; /* version.txt와 같아야 해요. 다르면 패드가 알아서 새로고침해요 */
+var APP_VERSION = "202610292000"; /* version.txt와 같아야 해요. 다르면 패드가 알아서 새로고침해요 */
 
 var STATIONS = [{id:"bul",name:"불고기",c:"#8C3B22"},{id:"tteok",name:"떡볶이",c:"#D23B3B"},{id:"hot",name:"핫도그",c:"#C8901A"},{id:"etc",name:"기타 음식",c:"#5B6C9A"},{id:"drink",name:"음료",c:"#1F7F86"}];
 var ST = {}; for (var si=0; si<STATIONS.length; si++) ST[STATIONS[si].id] = STATIONS[si];
@@ -513,9 +513,12 @@ function viewKitchen(){
 }
 /* 돈통: 대만달러 권종별 개수 (이 패드에 저장, 시작 잔돈 합계는 모든 패드와 공유) */
 var DENOMS = [{v:1000,t:"지폐"},{v:500,t:"지폐"},{v:100,t:"지폐"},{v:50,t:"동전"},{v:10,t:"동전"},{v:5,t:"동전"},{v:1,t:"동전"}];
+/* config.js의 startCash = 미리 정해둔 시작 잔돈(모든 패드 공통). 패드에서 고치면 그 패드 값이 우선해요 */
+function defaultStart(){ var d = {}, c = CFG.startCash || {}; for (var k in c) if (Number(c[k]) > 0) d[k] = Number(c[k]); return d; }
 var CASH = lsGet("pos.cash", {start:{}, end:{}});
+(function(){ var any = false; for (var k in CASH.start) if (Number(CASH.start[k]) > 0) any = true; if (!any) CASH.start = defaultStart(); })();
 /* 이 패드에만 있는 것(돈통 개수, 담던 주문)을 지워요. 다른 패드가 '모두 초기화'하면 여기서도 자동으로 불려요 */
-function clearLocal(){ CASH = {start:{}, end:{}}; lsSet("pos.cash", CASH); S.cart = {}; S.floatCash = 0; S.confirmCancel = null; }
+function clearLocal(){ CASH = {start:defaultStart(), end:{}}; lsSet("pos.cash", CASH); S.cart = {}; S.floatCash = 0; S.confirmCancel = null; }
 function cashSum(which){ var t = 0; each(DENOMS, function(d){ t += d.v * (Number(CASH[which][d.v]) || 0); }); return t; }
 function cashUsed(which){ for (var k in CASH[which]) if (Number(CASH[which][k]) > 0) return true; return false; }
 function startCash(){ return cashUsed("start") ? cashSum("start") : S.floatCash; }
