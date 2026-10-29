@@ -130,6 +130,19 @@ tfoot td{font-weight:700;border-bottom:0}
 .box input{width:120px;padding:8px;border-radius:8px;border:1px solid var(--line);text-align:right;-webkit-user-select:text;user-select:text}
 .box .sum{border-top:1px solid var(--line);font-weight:700}
 .box .sum b{font-size:26px}
+.cash{width:100%;border-collapse:collapse;margin:4px 0 10px}
+.cash th{font-size:12px;color:var(--muted);text-align:center;padding:4px}
+.cash td{padding:4px;border-bottom:1px solid var(--line);text-align:center}
+.cash td:first-child{text-align:left;font-weight:700;white-space:nowrap}
+.cash td small{color:var(--muted);font-weight:400;margin-left:4px}
+.cash input{width:100%;max-width:90px;float:none;padding:9px 6px;font-size:17px;text-align:center}
+.cash tfoot td{font-weight:800;border-bottom:0;padding-top:8px}
+.box .diff{border-radius:10px;padding:10px 12px;margin-top:8px;font-weight:800}
+.box .diff b{float:right;font-size:24px}
+.box .diff.ok{background:var(--ok-soft);color:var(--ok)}
+.box .diff.over{background:var(--warn-soft);color:var(--warn)}
+.box .diff.short{background:var(--bad-soft);color:var(--bad)}
+.box .note{font-size:12px;color:var(--muted);margin:2px 0 8px}
 .hist{max-height:440px;overflow:auto;-webkit-overflow-scrolling:touch}
 .h{overflow:hidden;padding:9px 0;border-bottom:1px solid var(--line);font-size:13px}
 .h .no{float:left;width:52px;font-size:20px;font-weight:800}
@@ -223,7 +236,7 @@ var URL_BASE = (CFG.supabaseUrl || "").replace(/\/$/, "");
 var KEY = CFG.supabaseKey || "";
 var REMOTE = !!(URL_BASE && KEY);
 var POLL_MS = 2000;
-var APP_VERSION = "202610291152"; /* version.txt와 같아야 해요. 다르면 패드가 알아서 새로고침해요 */
+var APP_VERSION = "202610291932"; /* version.txt와 같아야 해요. 다르면 패드가 알아서 새로고침해요 */
 
 var STATIONS = [{id:"bul",name:"불고기",c:"#8C3B22"},{id:"tteok",name:"떡볶이",c:"#D23B3B"},{id:"hot",name:"핫도그",c:"#C8901A"},{id:"etc",name:"기타 음식",c:"#5B6C9A"},{id:"drink",name:"음료",c:"#1F7F86"}];
 var ST = {}; for (var si=0; si<STATIONS.length; si++) ST[STATIONS[si].id] = STATIONS[si];
@@ -498,6 +511,32 @@ function viewKitchen(){
     lane("ready", "나갈 준비 끝 · 번호 불러주세요", ready, "조리 완료한 메뉴가 바로 여기로 와요") +
     lane("held", "옆으로 뺀 주문", held, "재료 대기 등으로 미뤄둔 주문") + "</div>";
 }
+/* 돈통: 대만달러 권종별 개수 (이 패드에 저장, 시작 잔돈 합계는 모든 패드와 공유) */
+var DENOMS = [{v:1000,t:"지폐"},{v:500,t:"지폐"},{v:100,t:"지폐"},{v:50,t:"동전"},{v:10,t:"동전"},{v:5,t:"동전"},{v:1,t:"동전"}];
+var CASH = lsGet("pos.cash", {start:{}, end:{}});
+function cashSum(which){ var t = 0; each(DENOMS, function(d){ t += d.v * (Number(CASH[which][d.v]) || 0); }); return t; }
+function cashUsed(which){ for (var k in CASH[which]) if (Number(CASH[which][k]) > 0) return true; return false; }
+function startCash(){ return cashUsed("start") ? cashSum("start") : S.floatCash; }
+function cashPanel(rev){
+  var rows = map(DENOMS, function(d){
+    var a = CASH.start[d.v], b = CASH.end[d.v];
+    return "<tr><td>" + d.v + "<small>" + d.t + "</small></td>" +
+      '<td><input data-cash="start|' + d.v + '" type="number" inputmode="numeric" min="0" value="' + (a ? a : "") + '" placeholder="0"></td>' +
+      '<td><input data-cash="end|' + d.v + '" type="number" inputmode="numeric" min="0" value="' + (b ? b : "") + '" placeholder="0"></td></tr>';
+  }).join("");
+  var start = startCash(), expect = start + rev, h = '<div class="panel box"><h3>돈통 맞춰보기 (NT$)</h3>' +
+    '<p class="note">지폐는 몇 장, 동전은 몇 개인지 적으세요. 시작할 때 한 번, 끝날 때 한 번.</p>' +
+    '<table class="cash"><thead><tr><th>권종</th><th>시작 잔돈</th><th>마감 때 센 돈</th></tr></thead><tbody>' + rows +
+    "</tbody><tfoot><tr><td>합계</td><td>" + nt(cashSum("start")) + "</td><td>" + nt(cashSum("end")) + "</td></tr></tfoot></table>";
+  if (!cashUsed("start") && S.floatCash) h += '<p class="note">다른 패드에서 입력한 시작 잔돈 ' + nt(S.floatCash) + "을 쓰고 있어요.</p>";
+  h += '<div class="r"><span>시작 잔돈</span><b>' + nt(start) + '</b></div><div class="r"><span>+ 오늘 매출</span><b>' + nt(rev) + '</b></div>' +
+    '<div class="r sum"><span>돈통에 있어야 할 돈</span><b>' + nt(expect) + "</b></div>";
+  if (cashUsed("end")){
+    var diff = cashSum("end") - expect;
+    h += '<div class="diff ' + (diff === 0 ? "ok" : diff > 0 ? "over" : "short") + '">' + (diff === 0 ? "딱 맞아요" : diff > 0 ? "돈이 남아요" : "돈이 모자라요") + "<b>" + (diff > 0 ? "+" : "") + nt(diff) + "</b></div>";
+  }
+  return h + '<p class="note" style="margin-top:10px"><button class="copy" id="cash-clear" style="margin:0">돈통 칸 비우기</button></p></div>';
+}
 function salesData(){
   var ok = filter(S.orders, function(o){ return o.status !== "cancelled"; }), rev = 0, per = {}, order = [];
   each(ok, function(o){ rev += o.total; each(o.items, function(i){ var nm = i.kr + (i.opt ? " · " + i.opt : ""); if (!per[nm]){ per[nm] = {q:0, amt:0, st:i.st}; order.push(nm); } per[nm].q += i.q; per[nm].amt += i.q * i.price; }); });
@@ -521,8 +560,7 @@ function viewSales(){
     '<div class="kpi"><span>아직 안 나간 주문</span><b' + (open ? ' style="color:#B7791F"' : "") + ">" + open + "건</b></div></div>" +
     '<div class="sales"><div class="panel"><h3>메뉴별 판매</h3><table><thead><tr><th>메뉴</th><th>수량</th><th>매출</th><th></th></tr></thead><tbody>' + rows +
     "</tbody><tfoot><tr><td>합계</td><td>" + qsum + "</td><td>" + nt(d.rev) + '</td><td></td></tr></tfoot></table><button class="copy" id="copy">정산 결과 복사 (단톡방용)</button><div id="copyout"></div></div>' +
-    '<div><div class="panel box"><h3>돈통 맞춰보기</h3><div class="r"><span>시작 잔돈</span><input id="float" type="number" inputmode="numeric" value="' + (S.floatCash || "") + '" placeholder="0"></div>' +
-    '<div class="r"><span>+ 매출</span><b>' + nt(d.rev) + '</b></div><div class="r sum"><span>돈통에 있어야 할 돈</span><b>' + nt(S.floatCash + d.rev) + "</b></div></div>" +
+    "<div>" + cashPanel(d.rev) +
     '<div class="panel"><h3>주문 기록</h3><div class="hist">' + (hist || '<div class="empty">주문이 들어오면 여기에 쌓여요</div>') + "</div></div></div></div>";
 }
 
@@ -579,15 +617,23 @@ document.addEventListener("click", function(e){
   if (g("cxno")){ S.confirmCancel = null; render(); return; }
   if (g("cx")){ S.confirmCancel = null; upd(idOf(g("cx")), {status:"cancelled"}); return; }
   if (b.id === "copy"){ copySummary(b); return; }
+  if (b.id === "cash-clear"){ if (b.getAttribute("data-sure")){ CASH = {start:{}, end:{}}; lsSet("pos.cash", CASH); render(); } else { b.setAttribute("data-sure", "1"); b.innerHTML = "한 번 더 누르면 비워요"; } return; }
   if (b.id === "btn-settings"){ openSettings(); return; }
 });
 document.addEventListener("change", function(e){
   if (e.target.id === "drinkNow"){ S.drinkNow = e.target.checked; lsSet("pos.drinkNow", S.drinkNow); }
-  if (e.target.id === "float"){ S.floatCash = Number(e.target.value) || 0; store.setConfig(S.menu, S.floatCash); e.target.blur(); render(); }
+  var ck = e.target.getAttribute && e.target.getAttribute("data-cash");
+  if (ck){ var p2 = ck.split("|"), n = Math.max(0, Math.floor(Number(e.target.value) || 0));
+    if (n) CASH[p2[0]][p2[1]] = n; else delete CASH[p2[0]][p2[1]];
+    lsSet("pos.cash", CASH);
+    if (p2[0] === "start"){ S.floatCash = cashSum("start"); store.setConfig(S.menu, S.floatCash); }
+    render(); }
 });
 function copySummary(b){
   var d = salesData();
-  var txt = ["[Autumn Fair 부스 정산]", "총 매출 " + nt(d.rev) + " (주문 " + d.ok.length + "건)", "", map(d.names, function(k){ return "▪ " + k + " " + d.per[k].q + "개"; }).join("\n\n")].join("\n");
+  var lines = ["[Autumn Fair 부스 정산]", "총 매출 " + nt(d.rev) + " (주문 " + d.ok.length + "건)", "시작 잔돈 " + nt(startCash()) + " / 돈통에 있어야 할 돈 " + nt(startCash() + d.rev)];
+  if (cashUsed("end")) lines.push("마감 때 센 돈 " + nt(cashSum("end")) + " (차이 " + nt(cashSum("end") - startCash() - d.rev) + ")");
+  var txt = lines.concat(["", map(d.names, function(k){ return "▪ " + k + " " + d.per[k].q + "개"; }).join("\n\n")]).join("\n");
   var done = function(){ b.innerHTML = "복사했어요"; setTimeout(function(){ b.innerHTML = "정산 결과 복사 (단톡방용)"; }, 1800); };
   var fallback = function(){ var out = document.getElementById("copyout"); out.innerHTML = '<textarea class="copied" readonly></textarea>'; var ta = out.firstChild; ta.value = txt; ta.focus(); ta.select();
     var ok = false; try { ok = document.execCommand("copy"); } catch(x){} if (ok) done(); else b.innerHTML = "아래 글을 길게 눌러 복사하세요"; };
