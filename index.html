@@ -223,7 +223,7 @@ var URL_BASE = (CFG.supabaseUrl || "").replace(/\/$/, "");
 var KEY = CFG.supabaseKey || "";
 var REMOTE = !!(URL_BASE && KEY);
 var POLL_MS = 2000;
-var APP_VERSION = "202610291150"; /* version.txt와 같아야 해요. 다르면 패드가 알아서 새로고침해요 */
+var APP_VERSION = "202610291152"; /* version.txt와 같아야 해요. 다르면 패드가 알아서 새로고침해요 */
 
 var STATIONS = [{id:"bul",name:"불고기",c:"#8C3B22"},{id:"tteok",name:"떡볶이",c:"#D23B3B"},{id:"hot",name:"핫도그",c:"#C8901A"},{id:"etc",name:"기타 음식",c:"#5B6C9A"},{id:"drink",name:"음료",c:"#1F7F86"}];
 var ST = {}; for (var si=0; si<STATIONS.length; si++) ST[STATIONS[si].id] = STATIONS[si];
@@ -368,7 +368,7 @@ var TOMATO = '<svg class="tom" viewBox="0 0 32 32" width="1em" height="1em" aria
 function optBadge(opt){
   if (!opt) return "";
   var no = /X$/.test(opt), icon = /케첩|케찹|ketchup/i.test(opt);
-  if (no) return '<span class="opt no">' + esc(opt) + (icon ? " (빼기)" : "") + "</span>";
+  if (no) return "";
   return '<span class="opt yes">' + (icon ? '<span class="toms">' + TOMATO + TOMATO + TOMATO + "</span>" : "") + esc(opt) + "</span>";
 }
 function keyId(k){ return String(k).split("|")[0]; }
@@ -384,7 +384,7 @@ function openAsk(m){
     if (e.target.id !== "scrim" && (!b || b === O)) return;
     var pick = b && b !== O ? b.getAttribute("data-pick") : "";
     O.innerHTML = ""; O.onclick = null;
-    if (pick){ var k = m.id + "|" + a + " " + pick; S.cart[k] = (S.cart[k] || 0) + 1; }
+    if (pick){ var k = pick === "O" ? m.id + "|" + a + " O" : m.id; S.cart[k] = (S.cart[k] || 0) + 1; }
     render();
   };
 }
