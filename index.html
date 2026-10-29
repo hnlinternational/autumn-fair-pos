@@ -139,12 +139,18 @@ textarea.copied{width:100%;height:160px;margin-top:8px;-webkit-user-select:text;
 .modal{background:var(--surface);border-radius:16px;padding:20px;max-width:560px;margin:20px auto}
 .modal h2{margin:0 0 8px;font-size:24px}
 .modal p{margin:0 0 12px;color:var(--muted);font-size:13px}
-.mrow{overflow:hidden;margin-bottom:8px}
-.mrow input{padding:9px;border-radius:8px;border:1px solid var(--line);-webkit-user-select:text;user-select:text}
-.mrow .nmi{width:52%;float:left}
-.mrow .pri{width:22%;float:left;margin-left:2%;text-align:right}
-.mrow .so{float:right;width:22%;font-size:12px;font-weight:700;padding:10px 4px;border-radius:8px;background:var(--sunk)}
-.mrow .so.on{background:var(--bad-soft);color:var(--bad)}
+.mrow{background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:10px;margin-bottom:10px}
+.mrow .g{display:grid;grid-template-columns:1fr 160px;grid-gap:8px;margin-bottom:8px}
+.mrow input,.mrow select{width:100%;padding:10px;border-radius:8px;border:1px solid var(--line);background:#fff;font-size:15px;-webkit-user-select:text;user-select:text}
+.mrow .pri{text-align:right}
+.mrow label{display:block;font-size:11px;color:var(--muted);font-weight:700;margin-bottom:3px}
+.mrow .ctl{overflow:hidden}
+.mrow .ctl button{padding:9px 12px;border-radius:8px;background:var(--sunk);font-weight:700;font-size:13px;margin-right:6px;float:left}
+.mrow .ctl button[disabled]{opacity:.3}
+.mrow .ctl .so.on{background:var(--bad-soft);color:var(--bad)}
+.mrow .ctl .del{float:right;margin-right:0;color:var(--bad)}
+.mrow .ctl .del.ask{background:var(--bad);color:#fff}
+.addm{display:block;width:100%;padding:14px;border-radius:12px;border:2px dashed var(--line);font-weight:700;color:var(--muted);margin-top:4px}
 .mfoot{text-align:right;margin-top:12px}
 .mfoot button{padding:12px 18px;border-radius:10px;font-weight:700;background:var(--sunk);margin-left:6px}
 .mfoot .p{background:var(--accent);color:#fff}
@@ -193,7 +199,7 @@ var KEY = CFG.supabaseKey || "";
 var REMOTE = !!(URL_BASE && KEY);
 var POLL_MS = 2000;
 
-var STATIONS = [{id:"bul",name:"불고기",c:"#8C3B22"},{id:"tteok",name:"떡볶이",c:"#D23B3B"},{id:"hot",name:"핫도그",c:"#C8901A"},{id:"drink",name:"음료",c:"#1F7F86"}];
+var STATIONS = [{id:"bul",name:"불고기",c:"#8C3B22"},{id:"tteok",name:"떡볶이",c:"#D23B3B"},{id:"hot",name:"핫도그",c:"#C8901A"},{id:"etc",name:"기타 음식",c:"#5B6C9A"},{id:"drink",name:"음료",c:"#1F7F86"}];
 var ST = {}; for (var si=0; si<STATIONS.length; si++) ST[STATIONS[si].id] = STATIONS[si];
 var DEFAULT_MENU = [
  {id:"m1",kr:"불고기 덮밥",en:"Bulgogi Rice",price:150,st:"bul",out:false},
@@ -381,7 +387,7 @@ function viewOrder(){
   var food = filter(S.menu, function(m){ return m.st !== "drink"; }), drinks = filter(S.menu, function(m){ return m.st === "drink"; });
   var h = '<div class="order"><div class="menu">';
   if (food.length) h += '<div class="cat">음식</div>' + rowsOf(food);
-  if (drinks.length) h += '<div class="cat">음료 · 밀키스</div>' + rowsOf(drinks);
+  if (drinks.length) h += '<div class="cat">음료</div>' + rowsOf(drinks);
   h += '</div><div class="cart"><h2>주문 <span>다음 번호 #' + nextNoHint() + "</span></h2>";
   if (lines.length){
     each(lines, function(l){
@@ -518,30 +524,56 @@ function copySummary(b){
 
 /* 메뉴·가격 설정 */
 function openSettings(){
-  var draft = clone(S.menu), O = document.getElementById("overlay");
+  var draft = clone(S.menu), O = document.getElementById("overlay"), askDel = null;
+  function trim(v){ return String(v).replace(/^\s+|\s+$/g, ""); }
+  function rowHtml(m, i){
+    var opts = map(STATIONS, function(k){ return '<option value="' + k.id + '"' + (m.st === k.id ? " selected" : "") + ">" + k.name + (k.id === "drink" ? " (아랫줄)" : " (윗줄)") + "</option>"; }).join("");
+    return '<div class="mrow">' +
+      '<div class="g"><div><label>메뉴 이름</label><input id="nm-' + m.id + '" value="' + esc(m.kr) + '" placeholder="예: 김밥"></div>' +
+      '<div><label>가격 (NT$)</label><input class="pri" id="pr-' + m.id + '" type="number" inputmode="numeric" value="' + m.price + '"></div></div>' +
+      '<div class="g"><div><label>영어 이름</label><input id="en-' + m.id + '" value="' + esc(m.en || "") + '" placeholder="예: Gimbap"></div>' +
+      '<div><label>종류 · 주방</label><select id="st-' + m.id + '">' + opts + "</select></div></div>" +
+      '<div class="ctl"><button data-up="' + m.id + '"' + (i === 0 ? " disabled" : "") + '>▲</button><button data-down="' + m.id + '"' + (i === draft.length - 1 ? " disabled" : "") + '>▼</button>' +
+      '<button class="so' + (m.out ? " on" : "") + '" data-so="' + m.id + '">' + (m.out ? "품절" : "판매 중") + "</button>" +
+      '<button class="del' + (askDel === m.id ? " ask" : "") + '" data-del="' + m.id + '">' + (askDel === m.id ? "한 번 더 누르면 삭제" : "삭제") + "</button></div></div>";
+  }
   function draw(){
-    var h = '<div class="scrim" id="scrim"><div class="modal"><h2>메뉴 · 가격</h2><p>바꾸면 모든 패드에 2초 안에 반영돼요. 다 떨어진 메뉴는 \'품절\'을 눌러 주세요.</p>';
-    each(STATIONS, function(s){ each(filter(draft, function(m){ return m.st === s.id; }), function(m){
-      h += '<div class="mrow"><input class="nmi" id="nm-' + m.id + '" value="' + esc(m.kr) + '"><input class="pri" id="pr-' + m.id + '" type="number" inputmode="numeric" value="' + m.price + '"><button class="so' + (m.out ? " on" : "") + '" data-so="' + m.id + '">' + (m.out ? "품절" : "판매 중") + "</button></div>";
-    }); });
-    h += '<div class="mfoot"><button id="m-cancel">닫기</button><button class="p" id="m-save">저장</button></div>' +
+    var old = document.getElementById("scrim"), top = old ? old.scrollTop : 0;
+    var h = '<div class="scrim" id="scrim"><div class="modal"><h2>메뉴 · 가격</h2><p>저장하면 모든 패드에 2초 안에 반영돼요. ▲▼로 순서를 바꾸고, 종류를 \'음료\'로 고르면 아랫줄, 나머지는 윗줄에 나와요. 이미 들어간 주문은 바뀌지 않아요.</p>';
+    each(draft, function(m, i){ h += rowHtml(m, i); });
+    h += '<button class="addm" id="m-add">+ 메뉴 추가</button>' +
+      '<div class="mfoot"><button id="m-cancel">닫기</button><button class="p" id="m-save">저장</button></div>' +
       '<div class="danger">행사 전 연습 주문 지우기: 모든 주문 기록이 삭제되고 번호가 #1부터 다시 시작해요. 아래에 <b>초기화</b>라고 입력하세요.<br>' +
       '<input id="reset-txt" placeholder="초기화"><button id="m-reset" class="dis">주문 전부 삭제</button></div></div></div>';
     O.innerHTML = h;
+    document.getElementById("scrim").scrollTop = top;
   }
-  function sync(){ each(draft, function(m){ var n = document.getElementById("nm-" + m.id), p = document.getElementById("pr-" + m.id);
-    if (n && n.value.replace(/\s/g, "")) m.kr = n.value.trim(); if (p) m.price = Math.max(0, Number(p.value) || 0); }); }
+  function sync(){ each(draft, function(m){
+    var n = document.getElementById("nm-" + m.id), p = document.getElementById("pr-" + m.id), en = document.getElementById("en-" + m.id), st = document.getElementById("st-" + m.id);
+    if (n) m.kr = trim(n.value); if (p) m.price = Math.max(0, Number(p.value) || 0);
+    if (en) m.en = trim(en.value); if (st) m.st = st.value; }); }
+  function idx(id){ for (var i=0;i<draft.length;i++) if (draft[i].id === id) return i; return -1; }
   function close(){ O.innerHTML = ""; O.onclick = null; O.oninput = null; render(); }
   draw();
-  O.oninput = function(e){ if (e.target.id === "reset-txt"){ document.getElementById("m-reset").className = e.target.value.trim() === "초기화" ? "" : "dis"; } };
+  O.oninput = function(e){ if (e.target.id === "reset-txt"){ document.getElementById("m-reset").className = trim(e.target.value) === "초기화" ? "" : "dis"; } };
   O.onclick = function(e){
     if (e.target.id === "scrim"){ close(); return; }
     var b = e.target; while (b && b !== O && b.tagName !== "BUTTON") b = b.parentNode;
-    if (!b || b === O) return;
+    if (!b || b === O || b.disabled) return;
+    var g = function(k){ return b.getAttribute("data-" + k); };
     if (b.id === "m-cancel"){ close(); return; }
-    if (b.getAttribute("data-so")){ sync(); var m = find(draft, function(x){ return x.id === b.getAttribute("data-so"); }); m.out = !m.out; draw(); return; }
-    if (b.id === "m-save"){ sync(); b.innerHTML = "저장 중…";
-      store.setConfig(draft, S.floatCash, function(err){ if (err){ b.innerHTML = "저장"; toast("저장하지 못했어요. 다시 눌러 주세요."); return; } S.menu = draft; close(); toast("메뉴를 저장했어요"); }); return; }
+    if (g("so")){ sync(); var m = draft[idx(g("so"))]; m.out = !m.out; draw(); return; }
+    if (g("up") || g("down")){ sync(); var i = idx(g("up") || g("down")), j = g("up") ? i - 1 : i + 1;
+      if (j >= 0 && j < draft.length){ var t = draft[i]; draft[i] = draft[j]; draft[j] = t; } askDel = null; draw(); return; }
+    if (g("del")){ sync(); if (askDel === g("del")){ draft.splice(idx(g("del")), 1); askDel = null; } else askDel = g("del"); draw(); return; }
+    if (b.id === "m-add"){ sync(); askDel = null; draft.push({id: "m" + Date.now(), kr: "", en: "", price: 0, st: "etc", out: false}); draw();
+      var sc = document.getElementById("scrim"); sc.scrollTop = sc.scrollHeight; var ni = document.getElementById("nm-" + draft[draft.length - 1].id); if (ni) ni.focus(); return; }
+    if (b.id === "m-save"){ sync();
+      if (!draft.length){ toast("메뉴가 하나는 있어야 해요."); return; }
+      if (find(draft, function(x){ return !x.kr; })){ toast("이름이 빈 메뉴가 있어요. 이름을 적거나 삭제해 주세요."); return; }
+      b.innerHTML = "저장 중…";
+      store.setConfig(draft, S.floatCash, function(err){ if (err){ b.innerHTML = "저장"; toast("저장하지 못했어요. 다시 눌러 주세요."); return; }
+        S.menu = draft; each(keys(S.cart), function(id){ if (!menuById(id)) delete S.cart[id]; }); close(); toast("메뉴를 저장했어요"); }); return; }
     if (b.id === "m-reset"){ if (b.className === "dis") return; b.innerHTML = "삭제 중…";
       store.reset(function(err){ if (err){ toast("삭제하지 못했어요. 다시 해 주세요."); b.innerHTML = "주문 전부 삭제"; return; } S.orders = []; knownIds = {}; close(); toast("주문 기록을 모두 지웠어요"); poll(); }); }
   };
