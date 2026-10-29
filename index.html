@@ -77,28 +77,35 @@ main{padding:14px 0 24px}
 .chip.on{border-color:var(--ink);background:var(--ink);color:#fff}
 .sound{float:right;padding:10px 16px}
 .sound.on{background:var(--ok-soft);color:var(--ok)}
-.lanes{display:grid;grid-template-columns:2fr 1fr 1fr;grid-gap:14px;-webkit-box-align:start;align-items:start}
+.lanes{display:grid;grid-template-columns:2.4fr 1.2fr 1fr;grid-gap:14px;-webkit-box-align:start;align-items:start}
 .lane{background:var(--sunk);border-radius:14px;padding:12px;min-height:220px;min-width:0}
 .lane h3{margin:0 0 10px;font-size:13px;color:var(--muted);overflow:hidden}
 .lane h3 b{float:right;color:var(--ink);font-size:16px}
-.cook .cards{display:grid;grid-template-columns:1fr 1fr;grid-gap:10px}
+.cook .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));grid-gap:10px}
 .card{background:var(--surface);border-radius:12px;border:1px solid var(--line);border-left:7px solid var(--line);padding:12px;margin-bottom:10px}
 .cook .card{margin-bottom:0}
 .card.new{-webkit-animation:pop 1.6s ease-out;animation:pop 1.6s ease-out}
 @-webkit-keyframes pop{0%{box-shadow:0 0 0 7px #D9531E}100%{box-shadow:0 0 0 0 rgba(0,0,0,0)}}
 @keyframes pop{0%{box-shadow:0 0 0 7px #D9531E}100%{box-shadow:0 0 0 0 rgba(0,0,0,0)}}
 .card.warn{border-left-color:var(--warn)} .card.bad{border-left-color:var(--bad);background:var(--bad-soft)} .card.ready{border-left-color:var(--ok)}
-.card .hd{overflow:hidden;margin-bottom:8px}
-.card .no{float:left;font-size:34px;font-weight:800;line-height:1}
-.card .age{float:right;font-size:13px;font-weight:700;color:var(--muted);margin-top:8px}
+.card .hd{display:-webkit-box;display:flex;-webkit-box-pack:justify;justify-content:space-between;-webkit-box-align:center;align-items:center;margin-bottom:10px}
+.card .no{font-size:42px;font-weight:800;line-height:1}
+.card .age{font-size:15px;font-weight:700;color:var(--muted)}
 .card.warn .age{color:var(--warn)} .card.bad .age{color:var(--bad)}
-.it{display:block;width:100%;text-align:left;padding:10px;border-radius:9px;background:var(--sunk);font-weight:600;margin-bottom:5px;font-size:16px}
-.it .tag{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px}
-.it.done{background:var(--ok-soft);color:var(--ok);text-decoration:line-through}
-.acts{display:grid;grid-template-columns:1fr 1fr;grid-gap:6px;margin-top:8px}
-.acts button{padding:12px 6px;border-radius:9px;font-weight:700;font-size:14px;background:var(--sunk)}
-.acts .serve{background:var(--ok);color:#fff}
+.it{display:-webkit-box;display:flex;-webkit-box-align:center;align-items:center;width:100%;min-height:84px;text-align:left;padding:12px 12px 12px 16px;border-radius:14px;background:#fff;border:2px solid var(--line);border-left:14px solid #999;margin-bottom:10px;font-size:26px;font-weight:800;line-height:1.3}
+.it:active{background:var(--sunk)}
+.it .nm{-webkit-box-flex:1;flex:1;min-width:0}
+.it .mk{margin-left:10px;padding:16px 18px;border-radius:12px;background:var(--ink);color:#fff;font-size:19px;font-weight:800;white-space:nowrap}
+.it.done{background:var(--ok-soft);border-color:var(--ok);color:var(--ok)}
+.it.done .nm{text-decoration:line-through}
+.it.done .mk{background:var(--ok)}
+.acts{display:grid;grid-template-columns:1fr 1.6fr;grid-gap:8px;margin-top:4px}
+.acts button{padding:18px 8px;border-radius:12px;font-weight:800;font-size:18px;background:var(--sunk)}
+.acts .serve{background:var(--ok);color:#fff;font-size:20px}
 .acts .serve.dim{background:var(--sunk);color:var(--muted)}
+.ready .it,.held .it{font-size:19px;min-height:64px;border-left-width:10px;padding-left:10px}
+.ready .it .mk,.held .it .mk{font-size:14px;padding:10px 10px}
+.ready .acts,.held .acts{grid-template-columns:1fr}
 
 /* 정산 */
 .kpis{display:grid;grid-template-columns:repeat(3,1fr);grid-gap:12px;margin-bottom:16px}
@@ -410,10 +417,10 @@ function cardHtml(o){
   each(sts, function(s){
     var d = o.done && o.done[s];
     var txt = map(filter(o.items, function(i){ return i.st === s; }), function(i){ return esc(i.kr) + " ×" + i.q; }).join("<br>");
-    h += '<button class="it' + (d ? " done" : "") + '" data-tog="' + o.id + "|" + s + '"><i class="tag" style="background:' + (ST[s] ? ST[s].c : "#999") + '"></i>' + txt + (d ? " · 완료" : "") + "</button>";
+    h += '<button class="it' + (d ? " done" : "") + '" data-tog="' + o.id + "|" + s + '" style="border-left-color:' + (ST[s] ? ST[s].c : "#999") + '"><span class="nm">' + txt + '</span><span class="mk">' + (d ? "✓ 완료됨" : "조리 완료 ✓") + "</span></button>";
   });
   h += '<div class="acts">' + (o.status === "held" ? '<button data-unhold="' + o.id + '">다시 올리기</button>' : '<button data-hold="' + o.id + '">옆으로 빼기</button>') +
-    '<button class="serve' + (ready ? "" : " dim") + '" data-serve="' + o.id + '">' + (ready ? "전달 완료" : "전달") + "</button></div></div>";
+    '<button class="serve' + (ready ? "" : " dim") + '" data-serve="' + o.id + '">' + (ready ? "손님께 전달 완료" : "전달") + "</button></div></div>";
   return h;
 }
 function viewKitchen(){
@@ -426,7 +433,7 @@ function viewKitchen(){
     return '<div class="lane ' + cls + '"><h3>' + title + "<b>" + list.length + '</b></h3><div class="cards">' + (list.length ? map(list, cardHtml).join("") : '<div class="empty">' + emptyTxt + "</div>") + "</div></div>";
   }
   return '<div class="ktop"><div class="chips">' + chips + '</div><button class="iconbtn sound' + (S.sound ? " on" : "") + '" id="sound">' + (S.sound ? "🔔 알림음 켜짐" : "🔕 알림음 켜기") + "</button></div>" +
-    '<div class="lanes">' + lane("cook", "조리 중 · 메뉴를 누르면 완료", cook, "새 주문이 들어오면 여기에 떠요") +
+    '<div class="lanes">' + lane("cook", "조리 중 · 다 만들면 \'조리 완료\'를 누르세요", cook, "새 주문이 들어오면 여기에 떠요") +
     lane("ready", "나갈 준비 끝 · 번호 불러주세요", ready, "다 만든 주문이 여기로 와요") +
     lane("held", "옆으로 뺀 주문", held, "재료 대기 등으로 미뤄둔 주문") + "</div>";
 }
