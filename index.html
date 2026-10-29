@@ -94,7 +94,7 @@ main{padding:14px 0 24px}
 .card.warn .age{color:var(--warn)} .card.bad .age{color:var(--bad)}
 .it{display:-webkit-box;display:flex;-webkit-box-align:center;align-items:center;width:100%;min-height:84px;text-align:left;padding:12px 12px 12px 16px;border-radius:14px;background:#fff;border:2px solid var(--line);border-left:14px solid #999;margin-bottom:10px;font-size:26px;font-weight:800;line-height:1.3}
 .it:active{background:var(--sunk)}
-.it .nm{-webkit-box-flex:1;flex:1;min-width:0}
+.it .nm{-webkit-box-flex:1;flex:1;min-width:0;line-height:1.75}
 .it .mk{margin-left:10px;padding:16px 18px;border-radius:12px;background:var(--ink);color:#fff;font-size:19px;font-weight:800;white-space:nowrap}
 .it.done{background:var(--ok-soft);border-color:var(--ok);color:var(--ok)}
 .it.done .nm{text-decoration:line-through}
@@ -151,6 +151,7 @@ textarea.copied{width:100%;height:160px;margin-top:8px;-webkit-user-select:text;
 .mrow .g{display:grid;grid-template-columns:1fr 160px;grid-gap:8px;margin-bottom:8px}
 .mrow input,.mrow select{width:100%;padding:10px;border-radius:8px;border:1px solid var(--line);background:#fff;font-size:15px;-webkit-user-select:text;user-select:text}
 .mrow .pri{text-align:right}
+.mrow .g.one{grid-template-columns:1fr}
 .mrow label{display:block;font-size:11px;color:var(--muted);font-weight:700;margin-bottom:3px}
 .mrow .ctl{overflow:hidden}
 .mrow .ctl button{padding:9px 12px;border-radius:8px;background:var(--sunk);font-weight:700;font-size:13px;margin-right:6px;float:left}
@@ -158,6 +159,16 @@ textarea.copied{width:100%;height:160px;margin-top:8px;-webkit-user-select:text;
 .mrow .ctl .so.on{background:var(--bad-soft);color:var(--bad)}
 .mrow .ctl .del{float:right;margin-right:0;color:var(--bad)}
 .mrow .ctl .del.ask{background:var(--bad);color:#fff}
+.opt{display:inline-block;vertical-align:middle;margin-left:8px;padding:3px 12px;border-radius:9px;font-size:.85em;font-weight:800;line-height:1.3;text-decoration:none}
+.opt.yes{background:#C2362B;color:#fff;border:3px solid #C2362B}
+.opt.no{background:#fff;color:#17201C;border:3px solid #17201C}
+.it .opt{font-size:22px;padding:4px 14px}
+.askbox{max-width:520px}
+.askbox h2{font-size:28px;margin-bottom:16px}
+.askbox .big{display:block;width:100%;padding:30px 16px;font-size:32px;font-weight:800;border-radius:18px;margin-bottom:12px;color:#fff}
+.askbox .big.yes{background:#C2362B}
+.askbox .big.no{background:#17201C}
+.askbox .cancel{display:block;margin:6px auto 0;padding:12px 20px;color:var(--muted);font-weight:700}
 .addm{display:block;width:100%;padding:14px;border-radius:12px;border:2px dashed var(--line);font-weight:700;color:var(--muted);margin-top:4px}
 .mfoot{text-align:right;margin-top:12px}
 .mfoot button{padding:12px 18px;border-radius:10px;font-weight:700;background:var(--sunk);margin-left:6px}
@@ -345,7 +356,25 @@ function relevant(o){ return S.station === "all" || !!find(o.items, function(i){
 function stationsOf(o){ var seen = {}, r = []; each(o.items, function(i){ if (!seen[i.st]){ seen[i.st]=1; r.push(i.st); } }); return r; }
 function allDone(o){ var s = stationsOf(o); for (var i=0;i<s.length;i++) if (!(o.done && o.done[s[i]])) return false; return true; }
 function ageMin(o){ return Math.floor((Date.now() - o.createdAt) / 60000); }
-function cartLines(){ var r = []; each(keys(S.cart), function(id){ var q = S.cart[id], m = menuById(id); if (q > 0 && m) r.push({m:m, q:q}); }); return r; }
+function askOf(m){ if (typeof m.ask === "string") return m.ask; return m.st === "hot" ? "케첩" : ""; }
+function optBadge(opt){ return opt ? '<span class="opt ' + (/X$/.test(opt) ? "no" : "yes") + '">' + esc(opt) + "</span>" : ""; }
+function keyId(k){ return String(k).split("|")[0]; }
+function cartLines(){ var r = []; each(keys(S.cart), function(k){ var q = S.cart[k], m = menuById(keyId(k)), opt = String(k).split("|")[1] || ""; if (q > 0 && m) r.push({key:k, m:m, q:q, opt:opt}); }); return r; }
+function qtyOf(id){ var t = 0; each(keys(S.cart), function(k){ if (keyId(k) === id) t += S.cart[k]; }); return t; }
+function openAsk(m){
+  var O = document.getElementById("overlay"), a = askOf(m);
+  O.innerHTML = '<div class="scrim" id="scrim"><div class="modal askbox"><h2>' + esc(m.kr) + " · " + esc(a) + ' 넣을까요?</h2>' +
+    '<button class="big yes" data-pick="O">' + esc(a) + ' O (넣어요)</button><button class="big no" data-pick="X">' + esc(a) + ' X (빼요)</button>' +
+    '<button class="cancel" data-pick="">취소</button></div></div>';
+  O.onclick = function(e){
+    var b = e.target; while (b && b !== O && b.tagName !== "BUTTON") b = b.parentNode;
+    if (e.target.id !== "scrim" && (!b || b === O)) return;
+    var pick = b && b !== O ? b.getAttribute("data-pick") : "";
+    O.innerHTML = ""; O.onclick = null;
+    if (pick){ var k = m.id + "|" + a + " " + pick; S.cart[k] = (S.cart[k] || 0) + 1; }
+    render();
+  };
+}
 function cartTotal(){ var t = 0; each(cartLines(), function(l){ t += l.m.price * l.q; }); return t; }
 function cartCount(){ var t = 0; each(cartLines(), function(l){ t += l.q; }); return t; }
 
@@ -384,7 +413,7 @@ function tileHtml(m){
   var nm = drink ? (m.kr.replace(/^밀키스\s*/, "") || m.kr) : m.kr;
   return '<button class="tile' + (drink ? " sm" : "") + (m.out ? " out" : "") + '" data-add="' + esc(m.id) + '">' +
     '<i class="stripe" style="background:' + s.c + '"></i>' +
-    (S.cart[m.id] ? '<span class="q" style="background:' + s.c + '">' + S.cart[m.id] + "</span>" : "") +
+    (qtyOf(m.id) ? '<span class="q" style="background:' + s.c + '">' + qtyOf(m.id) + "</span>" : "") +
     '<span class="kr">' + esc(nm) + '</span><span class="en">' + esc(m.en) + '</span>' +
     '<span class="price">' + (m.out ? "품절" : nt(m.price)) + "</span></button>";
 }
@@ -399,8 +428,8 @@ function viewOrder(){
   h += '</div><div class="cart"><h2>주문 <span>다음 번호 #' + nextNoHint() + "</span></h2>";
   if (lines.length){
     each(lines, function(l){
-      h += '<div class="line"><div class="nm">' + esc(l.m.kr) + "<small>" + nt(l.m.price) + "</small></div>" +
-        '<div class="step"><button data-dec="' + esc(l.m.id) + '">−</button><b>' + l.q + '</b><button data-add="' + esc(l.m.id) + '">+</button></div>' +
+      h += '<div class="line"><div class="nm">' + esc(l.m.kr) + optBadge(l.opt) + "<small>" + nt(l.m.price) + "</small></div>" +
+        '<div class="step"><button data-dec="' + esc(l.key) + '">−</button><b>' + l.q + '</b><button data-inc="' + esc(l.key) + '">+</button></div>' +
         '<div class="amt">' + nt(l.m.price * l.q) + "</div></div>";
     });
   } else h += '<div class="empty">왼쪽 메뉴를 누르면 여기에 담겨요</div>';
@@ -422,7 +451,7 @@ function partsFor(o, mode){
     return true;
   });
 }
-function itemsText(o, s){ return map(filter(o.items, function(i){ return i.st === s; }), function(i){ return esc(i.kr) + " ×" + i.q; }).join("<br>"); }
+function itemsText(o, s){ return map(filter(o.items, function(i){ return i.st === s; }), function(i){ return esc(i.kr) + " ×" + i.q + optBadge(i.opt); }).join("<br>"); }
 function cardHtml(o, mode){
   var parts = partsFor(o, mode), age = ageMin(o);
   var cls = "card" + (S.fresh[o.id] && mode === "cook" ? " new" : "") + (mode === "ready" ? " ready" : age >= 10 ? " bad" : age >= 5 ? " warn" : "");
@@ -458,7 +487,7 @@ function viewKitchen(){
 }
 function salesData(){
   var ok = filter(S.orders, function(o){ return o.status !== "cancelled"; }), rev = 0, per = {}, order = [];
-  each(ok, function(o){ rev += o.total; each(o.items, function(i){ if (!per[i.kr]){ per[i.kr] = {q:0, amt:0, st:i.st}; order.push(i.kr); } per[i.kr].q += i.q; per[i.kr].amt += i.q * i.price; }); });
+  each(ok, function(o){ rev += o.total; each(o.items, function(i){ var nm = i.kr + (i.opt ? " · " + i.opt : ""); if (!per[nm]){ per[nm] = {q:0, amt:0, st:i.st}; order.push(nm); } per[nm].q += i.q; per[nm].amt += i.q * i.price; }); });
   order.sort(function(a,b){ return per[b].amt - per[a].amt; });
   return {ok:ok, rev:rev, per:per, names:order};
 }
@@ -472,7 +501,7 @@ function viewSales(){
     var lab = {open:"조리중", held:"보류", served:"전달됨", cancelled:"취소"}[o.status] || o.status;
     var t = new Date(o.createdAt), hh = ("0" + t.getHours()).slice(-2) + ":" + ("0" + t.getMinutes()).slice(-2);
     var btn = o.status === "cancelled" ? "" : S.confirmCancel === o.id ? '<button class="y" data-cx="' + o.id + '">취소 확정</button><button class="n" data-cxno="1">아니요</button>' : '<button class="cxb" data-cxask="' + o.id + '">취소</button>';
-    return '<div class="h' + (o.status === "cancelled" ? " cx" : "") + '"><span class="no">#' + o.no + '</span><span class="txt">' + map(o.items, function(i){ return esc(i.kr) + "×" + i.q; }).join(", ") +
+    return '<div class="h' + (o.status === "cancelled" ? " cx" : "") + '"><span class="no">#' + o.no + '</span><span class="txt">' + map(o.items, function(i){ return esc(i.kr) + (i.opt ? "(" + esc(i.opt) + ")" : "") + "×" + i.q; }).join(", ") +
       "<br><small>" + hh + " · " + nt(o.total) + '</small></span><span class="rt"><span class="st ' + o.status + '">' + lab + "</span><br>" + btn + "</span></div>";
   }).join("");
   return '<div class="kpis"><div class="kpi hi"><span>총 매출 (현금)</span><b>' + nt(d.rev) + '</b></div><div class="kpi"><span>주문 수</span><b>' + d.ok.length + '건</b></div>' +
@@ -494,7 +523,7 @@ var busy = false;
 function submit(){
   var lines = cartLines(); if (busy || !lines.length) return; busy = true;
   var done = {}; if (S.drinkNow){ done.drink = true; done.$served = {drink: true}; }
-  var o = {items: map(lines, function(l){ return {id:l.m.id, kr:l.m.kr, price:l.m.price, q:l.q, st:l.m.st}; }), total: cartTotal(), status: "open", done: done};
+  var o = {items: map(lines, function(l){ var it = {id:l.m.id, kr:l.m.kr, price:l.m.price, q:l.q, st:l.m.st}; if (l.opt) it.opt = l.opt; return it; }), total: cartTotal(), status: "open", done: done};
   var onlyDrinks = true; each(o.items, function(i){ if (i.st !== "drink" || !S.drinkNow) onlyDrinks = false; });
   if (onlyDrinks) o.status = "served";
   document.getElementById("go").innerHTML = "저장 중…";
@@ -517,7 +546,8 @@ document.addEventListener("click", function(e){
   if (!b || !b.getAttribute) return;
   var g = function(k){ return b.getAttribute("data-" + k); };
   if (g("v")){ S.view = g("v"); lsSet("pos.view", S.view); try { history.replaceState(null, "", "#" + S.view); } catch(x){} render(); return; }
-  if (g("add")){ var m = menuById(g("add")); if (m && !m.out){ S.cart[m.id] = (S.cart[m.id]||0) + 1; render(); } return; }
+  if (g("add")){ var m = menuById(g("add")); if (m && !m.out){ if (askOf(m)) openAsk(m); else { S.cart[m.id] = (S.cart[m.id]||0) + 1; render(); } } return; }
+  if (g("inc")){ S.cart[g("inc")] = (S.cart[g("inc")]||0) + 1; render(); return; }
   if (g("dec")){ S.cart[g("dec")] = Math.max(0, (S.cart[g("dec")]||0) - 1); render(); return; }
   if (b.id === "go"){ submit(); return; }
   if (b.id === "clear"){ S.cart = {}; render(); return; }
@@ -562,6 +592,7 @@ function openSettings(){
       '<div><label>가격 (NT$)</label><input class="pri" id="pr-' + m.id + '" type="number" inputmode="numeric" value="' + m.price + '"></div></div>' +
       '<div class="g"><div><label>영어 이름</label><input id="en-' + m.id + '" value="' + esc(m.en || "") + '" placeholder="예: Gimbap"></div>' +
       '<div><label>종류 · 주방</label><select id="st-' + m.id + '">' + opts + "</select></div></div>" +
+      '<div class="g one"><div><label>주문할 때 물어볼 것 (예: 케첩 · 비우면 안 물어봐요)</label><input id="ask-' + m.id + '" value="' + esc(askOf(m)) + '" placeholder="예: 케첩"></div></div>' +
       '<div class="ctl"><button data-up="' + m.id + '"' + (i === 0 ? " disabled" : "") + '>▲</button><button data-down="' + m.id + '"' + (i === draft.length - 1 ? " disabled" : "") + '>▼</button>' +
       '<button class="so' + (m.out ? " on" : "") + '" data-so="' + m.id + '">' + (m.out ? "품절" : "판매 중") + "</button>" +
       '<button class="del' + (askDel === m.id ? " ask" : "") + '" data-del="' + m.id + '">' + (askDel === m.id ? "한 번 더 누르면 삭제" : "삭제") + "</button></div></div>";
@@ -580,7 +611,8 @@ function openSettings(){
   function sync(){ each(draft, function(m){
     var n = document.getElementById("nm-" + m.id), p = document.getElementById("pr-" + m.id), en = document.getElementById("en-" + m.id), st = document.getElementById("st-" + m.id);
     if (n) m.kr = trim(n.value); if (p) m.price = Math.max(0, Number(p.value) || 0);
-    if (en) m.en = trim(en.value); if (st) m.st = st.value; }); }
+    if (en) m.en = trim(en.value); if (st) m.st = st.value;
+    var ak = document.getElementById("ask-" + m.id); if (ak) m.ask = trim(ak.value); }); }
   function idx(id){ for (var i=0;i<draft.length;i++) if (draft[i].id === id) return i; return -1; }
   function close(){ O.innerHTML = ""; O.onclick = null; O.oninput = null; render(); }
   draw();
@@ -595,14 +627,14 @@ function openSettings(){
     if (g("up") || g("down")){ sync(); var i = idx(g("up") || g("down")), j = g("up") ? i - 1 : i + 1;
       if (j >= 0 && j < draft.length){ var t = draft[i]; draft[i] = draft[j]; draft[j] = t; } askDel = null; draw(); return; }
     if (g("del")){ sync(); if (askDel === g("del")){ draft.splice(idx(g("del")), 1); askDel = null; } else askDel = g("del"); draw(); return; }
-    if (b.id === "m-add"){ sync(); askDel = null; draft.push({id: "m" + Date.now(), kr: "", en: "", price: 0, st: "etc", out: false}); draw();
+    if (b.id === "m-add"){ sync(); askDel = null; draft.push({id: "m" + Date.now(), kr: "", en: "", price: 0, st: "etc", out: false, ask: ""}); draw();
       var sc = document.getElementById("scrim"); sc.scrollTop = sc.scrollHeight; var ni = document.getElementById("nm-" + draft[draft.length - 1].id); if (ni) ni.focus(); return; }
     if (b.id === "m-save"){ sync();
       if (!draft.length){ toast("메뉴가 하나는 있어야 해요."); return; }
       if (find(draft, function(x){ return !x.kr; })){ toast("이름이 빈 메뉴가 있어요. 이름을 적거나 삭제해 주세요."); return; }
       b.innerHTML = "저장 중…";
       store.setConfig(draft, S.floatCash, function(err){ if (err){ b.innerHTML = "저장"; toast("저장하지 못했어요. 다시 눌러 주세요."); return; }
-        S.menu = draft; each(keys(S.cart), function(id){ if (!menuById(id)) delete S.cart[id]; }); close(); toast("메뉴를 저장했어요"); }); return; }
+        S.menu = draft; each(keys(S.cart), function(k){ if (!menuById(keyId(k))) delete S.cart[k]; }); close(); toast("메뉴를 저장했어요"); }); return; }
     if (b.id === "m-reset"){ if (b.className === "dis") return; b.innerHTML = "삭제 중…";
       store.reset(function(err){ if (err){ toast("삭제하지 못했어요. 다시 해 주세요."); b.innerHTML = "주문 전부 삭제"; return; } S.orders = []; knownIds = {}; close(); toast("주문 기록을 모두 지웠어요"); poll(); }); }
   };
