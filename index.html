@@ -220,7 +220,7 @@ textarea.copied{width:100%;height:160px;margin-top:8px;-webkit-user-select:text;
       <button id="tab-order" data-v="order">주문</button><button id="tab-kitchen" data-v="kitchen">주방</button><button id="tab-sales" data-v="sales">정산</button>
     </div>
     <span id="sync" class="pill local">연결 중…</span>
-    <button id="btn-settings" class="iconbtn">메뉴·가격</button>
+    <button id="btn-settings" class="iconbtn">메뉴·설정</button>
   </div>
   <main id="view"></main>
 </div>
@@ -236,7 +236,7 @@ var URL_BASE = (CFG.supabaseUrl || "").replace(/\/$/, "");
 var KEY = CFG.supabaseKey || "";
 var REMOTE = !!(URL_BASE && KEY);
 var POLL_MS = 2000;
-var APP_VERSION = "202610291932"; /* version.txt와 같아야 해요. 다르면 패드가 알아서 새로고침해요 */
+var APP_VERSION = "202610291934"; /* version.txt와 같아야 해요. 다르면 패드가 알아서 새로고침해요 */
 
 var STATIONS = [{id:"bul",name:"불고기",c:"#8C3B22"},{id:"tteok",name:"떡볶이",c:"#D23B3B"},{id:"hot",name:"핫도그",c:"#C8901A"},{id:"etc",name:"기타 음식",c:"#5B6C9A"},{id:"drink",name:"음료",c:"#1F7F86"}];
 var ST = {}; for (var si=0; si<STATIONS.length; si++) ST[STATIONS[si].id] = STATIONS[si];
@@ -306,7 +306,7 @@ var store = REMOTE ? {
       api("GET", q, null, function(err, rows){
         if (err) return cb(err);
         if (full){ sync.rows = {}; sync.lastFull = Date.now(); }
-        if (cfg) sync.resetAt = cfg.reset_at;
+        if (cfg){ if (sync.resetAt && cfg.reset_at !== sync.resetAt) clearLocal(); sync.resetAt = cfg.reset_at; }
         each(rows || [], function(r){ sync.rows[r.id] = r; if (!sync.since || r.updated_at > sync.since) sync.since = r.updated_at; });
         if (!sync.since) sync.since = new Date().toISOString();
         var list = map(keys(sync.rows), function(k){ return rowToOrder(sync.rows[k]); });
@@ -514,6 +514,8 @@ function viewKitchen(){
 /* 돈통: 대만달러 권종별 개수 (이 패드에 저장, 시작 잔돈 합계는 모든 패드와 공유) */
 var DENOMS = [{v:1000,t:"지폐"},{v:500,t:"지폐"},{v:100,t:"지폐"},{v:50,t:"동전"},{v:10,t:"동전"},{v:5,t:"동전"},{v:1,t:"동전"}];
 var CASH = lsGet("pos.cash", {start:{}, end:{}});
+/* 이 패드에만 있는 것(돈통 개수, 담던 주문)을 지워요. 다른 패드가 '모두 초기화'하면 여기서도 자동으로 불려요 */
+function clearLocal(){ CASH = {start:{}, end:{}}; lsSet("pos.cash", CASH); S.cart = {}; S.floatCash = 0; S.confirmCancel = null; }
 function cashSum(which){ var t = 0; each(DENOMS, function(d){ t += d.v * (Number(CASH[which][d.v]) || 0); }); return t; }
 function cashUsed(which){ for (var k in CASH[which]) if (Number(CASH[which][k]) > 0) return true; return false; }
 function startCash(){ return cashUsed("start") ? cashSum("start") : S.floatCash; }
@@ -658,12 +660,12 @@ function openSettings(){
   }
   function draw(){
     var old = document.getElementById("scrim"), top = old ? old.scrollTop : 0;
-    var h = '<div class="scrim" id="scrim"><div class="modal"><h2>메뉴 · 가격</h2><p>저장하면 모든 패드에 2초 안에 반영돼요. ▲▼로 순서를 바꾸고, 종류를 \'음료\'로 고르면 아랫줄, 나머지는 윗줄에 나와요. 이미 들어간 주문은 바뀌지 않아요.</p>';
+    var h = '<div class="scrim" id="scrim"><div class="modal"><h2>메뉴 · 설정</h2><p>저장하면 모든 패드에 2초 안에 반영돼요. ▲▼로 순서를 바꾸고, 종류를 \'음료\'로 고르면 아랫줄, 나머지는 윗줄에 나와요. 이미 들어간 주문은 바뀌지 않아요.</p>';
     each(draft, function(m, i){ h += rowHtml(m, i); });
     h += '<button class="addm" id="m-add">+ 메뉴 추가</button>' +
       '<div class="mfoot"><button id="m-cancel">닫기</button><button class="p" id="m-save">저장</button></div>' +
-      '<div class="danger">행사 전 연습 주문 지우기: 모든 주문 기록이 삭제되고 번호가 #1부터 다시 시작해요. 아래에 <b>초기화</b>라고 입력하세요.<br>' +
-      '<input id="reset-txt" placeholder="초기화"><button id="m-reset" class="dis">주문 전부 삭제</button></div></div></div>';
+      '<div class="danger"><b>모두 초기화</b> (행사 시작 전 연습 데이터 지우기)<br>주문 기록, 매출, 돈통 기록을 모든 패드에서 지우고 번호를 #1부터 다시 시작해요. 메뉴와 가격은 그대로 남아요.<br>아래에 <b>초기화</b>라고 입력하세요.<br>' +
+      '<input id="reset-txt" placeholder="초기화"><button id="m-reset" class="dis">모두 초기화</button></div></div></div>';
     O.innerHTML = h;
     document.getElementById("scrim").scrollTop = top;
   }
@@ -695,7 +697,8 @@ function openSettings(){
       store.setConfig(draft, S.floatCash, function(err){ if (err){ b.innerHTML = "저장"; toast("저장하지 못했어요. 다시 눌러 주세요."); return; }
         S.menu = draft; each(keys(S.cart), function(k){ if (!menuById(keyId(k))) delete S.cart[k]; }); close(); toast("메뉴를 저장했어요"); }); return; }
     if (b.id === "m-reset"){ if (b.className === "dis") return; b.innerHTML = "삭제 중…";
-      store.reset(function(err){ if (err){ toast("삭제하지 못했어요. 다시 해 주세요."); b.innerHTML = "주문 전부 삭제"; return; } S.orders = []; knownIds = {}; close(); toast("주문 기록을 모두 지웠어요"); poll(); }); }
+      store.reset(function(err){ if (err){ toast("지우지 못했어요. 인터넷을 확인하고 다시 해 주세요."); b.innerHTML = "모두 초기화"; return; }
+        clearLocal(); store.setConfig(S.menu, 0); S.orders = []; knownIds = {}; close(); toast("모두 초기화했어요. 다음 주문은 #1이에요"); poll(); }); }
   };
 }
 
