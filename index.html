@@ -105,7 +105,8 @@ main{padding:14px 0 24px}
 .acts .serve.dim{background:var(--sunk);color:var(--muted)}
 .ready .it,.held .it{font-size:19px;min-height:64px;border-left-width:10px;padding-left:10px}
 .ready .it .mk,.held .it .mk{font-size:14px;padding:10px 10px}
-.ready .acts,.held .acts{grid-template-columns:1fr}
+.ready .acts,.held .acts,.acts.one{grid-template-columns:1fr}
+.still{font-size:14px;font-weight:700;color:var(--warn);background:var(--warn-soft);border-radius:8px;padding:8px 10px;margin-bottom:8px}
 
 /* 정산 */
 .kpis{display:grid;grid-template-columns:repeat(3,1fr);grid-gap:12px;margin-bottom:16px}
@@ -409,32 +410,50 @@ function viewOrder(){
   if (lines.length) h += '<button class="ghost" id="clear">주문 비우기</button>';
   return h + "</div></div>";
 }
-function cardHtml(o){
-  var sts = filter(stationsOf(o), function(s){ return S.station === "all" || s === S.station; });
-  var age = ageMin(o), ready = allDone(o);
-  var cls = "card" + (S.fresh[o.id] ? " new" : "") + (ready ? " ready" : age >= 10 ? " bad" : age >= 5 ? " warn" : "");
-  var h = '<div class="' + cls + '"><div class="hd"><span class="no">#' + o.no + '</span><span class="age">' + (age < 1 ? "방금" : age + "분 전") + "</span></div>";
-  each(sts, function(s){
-    var d = o.done && o.done[s];
-    var txt = map(filter(o.items, function(i){ return i.st === s; }), function(i){ return esc(i.kr) + " ×" + i.q; }).join("<br>");
-    h += '<button class="it' + (d ? " done" : "") + '" data-tog="' + o.id + "|" + s + '" style="border-left-color:' + (ST[s] ? ST[s].c : "#999") + '"><span class="nm">' + txt + '</span><span class="mk">' + (d ? "✓ 완료됨" : "조리 완료 ✓") + "</span></button>";
+/* 메뉴(주방)별로 따로 움직여요: 조리 완료된 부분은 바로 '나갈 준비 끝'으로, 나머지는 '조리 중'에 남아요 */
+function cooked(o, s){ return !!(o.done && o.done[s]); }
+function servedPart(o, s){ return !!(o.done && o.done.$served && o.done.$served[s]); }
+function myParts(o){ return filter(stationsOf(o), function(s){ return S.station === "all" || s === S.station; }); }
+function partsFor(o, mode){
+  return filter(myParts(o), function(s){
+    if (servedPart(o, s)) return false;
+    if (mode === "cook") return !cooked(o, s);
+    if (mode === "ready") return cooked(o, s);
+    return true;
   });
-  h += '<div class="acts">' + (o.status === "held" ? '<button data-unhold="' + o.id + '">다시 올리기</button>' : '<button data-hold="' + o.id + '">옆으로 빼기</button>') +
-    '<button class="serve' + (ready ? "" : " dim") + '" data-serve="' + o.id + '">' + (ready ? "손님께 전달 완료" : "전달") + "</button></div></div>";
+}
+function itemsText(o, s){ return map(filter(o.items, function(i){ return i.st === s; }), function(i){ return esc(i.kr) + " ×" + i.q; }).join("<br>"); }
+function cardHtml(o, mode){
+  var parts = partsFor(o, mode), age = ageMin(o);
+  var cls = "card" + (S.fresh[o.id] && mode === "cook" ? " new" : "") + (mode === "ready" ? " ready" : age >= 10 ? " bad" : age >= 5 ? " warn" : "");
+  var h = '<div class="' + cls + '"><div class="hd"><span class="no">#' + o.no + '</span><span class="age">' + (age < 1 ? "방금" : age + "분 전") + "</span></div>";
+  each(parts, function(s){
+    var d = cooked(o, s);
+    h += '<button class="it' + (d ? " done" : "") + '" data-tog="' + o.id + "|" + s + '" style="border-left-color:' + (ST[s] ? ST[s].c : "#999") + '"><span class="nm">' + itemsText(o, s) + '</span><span class="mk">' + (d ? "✓ 완료됨" : "조리 완료 ✓") + "</span></button>";
+  });
+  if (mode === "ready"){
+    var still = filter(stationsOf(o), function(s){ return !cooked(o, s) && !servedPart(o, s); });
+    if (still.length) h += '<div class="still">아직 조리 중: ' + map(still, function(s){ return ST[s] ? ST[s].name : s; }).join(", ") + "</div>";
+    h += '<div class="acts one"><button class="serve" data-servepart="' + o.id + '">손님께 전달 완료</button></div></div>';
+  } else if (mode === "held"){
+    h += '<div class="acts one"><button data-unhold="' + o.id + '">다시 올리기</button></div></div>';
+  } else {
+    h += '<div class="acts one"><button data-hold="' + o.id + '">옆으로 빼기</button></div></div>';
+  }
   return h;
 }
 function viewKitchen(){
   var open = filter(S.orders, function(o){ return isOpen(o) && relevant(o); });
-  var cook = filter(open, function(o){ return o.status === "open" && !allDone(o); });
-  var ready = filter(open, function(o){ return o.status === "open" && allDone(o); });
-  var held = filter(open, function(o){ return o.status === "held"; });
+  var cook = filter(open, function(o){ return o.status === "open" && partsFor(o, "cook").length; });
+  var ready = filter(open, function(o){ return o.status === "open" && partsFor(o, "ready").length; });
+  var held = filter(open, function(o){ return o.status === "held" && partsFor(o, "held").length; });
   var chips = map([{id:"all",name:"전체"}].concat(STATIONS), function(s){ return '<button class="chip' + (S.station === s.id ? " on" : "") + '" data-st="' + s.id + '">' + s.name + "</button>"; }).join("");
   function lane(cls, title, list, emptyTxt){
-    return '<div class="lane ' + cls + '"><h3>' + title + "<b>" + list.length + '</b></h3><div class="cards">' + (list.length ? map(list, cardHtml).join("") : '<div class="empty">' + emptyTxt + "</div>") + "</div></div>";
+    return '<div class="lane ' + cls + '"><h3>' + title + "<b>" + list.length + '</b></h3><div class="cards">' + (list.length ? map(list, function(o){ return cardHtml(o, cls); }).join("") : '<div class="empty">' + emptyTxt + "</div>") + "</div></div>";
   }
   return '<div class="ktop"><div class="chips">' + chips + '</div><button class="iconbtn sound' + (S.sound ? " on" : "") + '" id="sound">' + (S.sound ? "🔔 알림음 켜짐" : "🔕 알림음 켜기") + "</button></div>" +
     '<div class="lanes">' + lane("cook", "조리 중 · 다 만들면 \'조리 완료\'를 누르세요", cook, "새 주문이 들어오면 여기에 떠요") +
-    lane("ready", "나갈 준비 끝 · 번호 불러주세요", ready, "다 만든 주문이 여기로 와요") +
+    lane("ready", "나갈 준비 끝 · 번호 불러주세요", ready, "조리 완료한 메뉴가 바로 여기로 와요") +
     lane("held", "옆으로 뺀 주문", held, "재료 대기 등으로 미뤄둔 주문") + "</div>";
 }
 function salesData(){
@@ -474,9 +493,9 @@ function toast(html){
 var busy = false;
 function submit(){
   var lines = cartLines(); if (busy || !lines.length) return; busy = true;
-  var done = {}; if (S.drinkNow) done.drink = true;
+  var done = {}; if (S.drinkNow){ done.drink = true; done.$served = {drink: true}; }
   var o = {items: map(lines, function(l){ return {id:l.m.id, kr:l.m.kr, price:l.m.price, q:l.q, st:l.m.st}; }), total: cartTotal(), status: "open", done: done};
-  var onlyDrinks = true; each(o.items, function(i){ if (!done[i.st]) onlyDrinks = false; });
+  var onlyDrinks = true; each(o.items, function(i){ if (i.st !== "drink" || !S.drinkNow) onlyDrinks = false; });
   if (onlyDrinks) o.status = "served";
   document.getElementById("go").innerHTML = "저장 중…";
   store.add(o, function(err, saved){
@@ -505,9 +524,12 @@ document.addEventListener("click", function(e){
   if (g("st")){ S.station = g("st"); lsSet("pos.station", S.station); render(); return; }
   if (b.id === "sound"){ toggleSound(); return; }
   if (g("tog")){ var p = g("tog").split("|"), id = idOf(p[0]), o = find(S.orders, function(x){ return x.id === id; });
-    if (o){ var nd = assign({}, o.done); nd[p[1]] = !nd[p[1]]; upd(id, {done: nd}); } return; }
-  if (g("serve")){ var sid = idOf(g("serve")), so = find(S.orders, function(x){ return x.id === sid; });
-    if (so){ var all = {}; each(stationsOf(so), function(s){ all[s] = true; }); upd(sid, {status:"served", done: all}); } return; }
+    if (o){ var nd = clone(o.done || {}); nd[p[1]] = !nd[p[1]]; upd(id, {done: nd}); } return; }
+  if (g("servepart")){ var sid = idOf(g("servepart")), so = find(S.orders, function(x){ return x.id === sid; });
+    if (so){ var nd2 = clone(so.done || {}); nd2.$served = nd2.$served || {};
+      each(partsFor(so, "ready"), function(s){ nd2.$served[s] = true; });
+      var allServed = true; each(stationsOf(so), function(s){ if (!nd2.$served[s]) allServed = false; });
+      upd(sid, allServed ? {status:"served", done: nd2} : {done: nd2}); } return; }
   if (g("hold")){ upd(idOf(g("hold")), {status:"held"}); return; }
   if (g("unhold")){ upd(idOf(g("unhold")), {status:"open"}); return; }
   if (g("cxask")){ S.confirmCancel = idOf(g("cxask")); render(); return; }
