@@ -236,7 +236,7 @@ var URL_BASE = (CFG.supabaseUrl || "").replace(/\/$/, "");
 var KEY = CFG.supabaseKey || "";
 var REMOTE = !!(URL_BASE && KEY);
 var POLL_MS = 2000;
-var APP_VERSION = "202610292003"; /* version.txt와 같아야 해요. 다르면 패드가 알아서 새로고침해요 */
+var APP_VERSION = "202610301459"; /* version.txt와 같아야 해요. 다르면 패드가 알아서 새로고침해요 */
 
 var STATIONS = [{id:"bul",name:"불고기",c:"#8C3B22"},{id:"tteok",name:"떡볶이",c:"#D23B3B"},{id:"hot",name:"핫도그",c:"#C8901A"},{id:"etc",name:"기타 음식",c:"#5B6C9A"},{id:"drink",name:"음료",c:"#1F7F86"}];
 var ST = {}; for (var si=0; si<STATIONS.length; si++) ST[STATIONS[si].id] = STATIONS[si];
@@ -372,7 +372,9 @@ function isTyping(){ var a = document.activeElement; return a && (a.tagName === 
 /* ---------- 계산 ---------- */
 function menuById(id){ return find(S.menu, function(m){ return m.id === id; }); }
 function isOpen(o){ return o.status === "open" || o.status === "held"; }
-function relevant(o){ return S.station === "all" || !!find(o.items, function(i){ return i.st === S.station; }); }
+/* 칩 하나가 여러 주방을 볼 수 있어요 (예: "bul+tteok" = 불고기와 떡볶이를 같이) */
+function inStation(st){ return S.station === "all" || ("+" + S.station + "+").indexOf("+" + st + "+") >= 0; }
+function relevant(o){ return S.station === "all" || !!find(o.items, function(i){ return inStation(i.st); }); }
 function stationsOf(o){ var seen = {}, r = []; each(o.items, function(i){ if (!seen[i.st]){ seen[i.st]=1; r.push(i.st); } }); return r; }
 function allDone(o){ var s = stationsOf(o); for (var i=0;i<s.length;i++) if (!(o.done && o.done[s[i]])) return false; return true; }
 function ageMin(o){ return Math.floor((Date.now() - o.createdAt) / 60000); }
@@ -468,7 +470,7 @@ function viewOrder(){
 /* 메뉴(주방)별로 따로 움직여요: 조리 완료된 부분은 바로 '나갈 준비 끝'으로, 나머지는 '조리 중'에 남아요 */
 function cooked(o, s){ return !!(o.done && o.done[s]); }
 function servedPart(o, s){ return !!(o.done && o.done.$served && o.done.$served[s]); }
-function myParts(o){ return filter(stationsOf(o), function(s){ return S.station === "all" || s === S.station; }); }
+function myParts(o){ return filter(stationsOf(o), function(s){ return inStation(s); }); }
 function partsFor(o, mode){
   return filter(myParts(o), function(s){
     if (servedPart(o, s)) return false;
@@ -502,7 +504,7 @@ function viewKitchen(){
   var cook = filter(open, function(o){ return o.status === "open" && partsFor(o, "cook").length; });
   var ready = filter(open, function(o){ return o.status === "open" && partsFor(o, "ready").length; });
   var held = filter(open, function(o){ return o.status === "held" && partsFor(o, "held").length; });
-  var chips = map([{id:"all",name:"전체"}].concat(STATIONS), function(s){ return '<button class="chip' + (S.station === s.id ? " on" : "") + '" data-st="' + s.id + '">' + s.name + "</button>"; }).join("");
+  var chips = map([{id:"all",name:"전체"},{id:"bul+tteok",name:"불고기+떡볶이"}].concat(STATIONS), function(s){ return '<button class="chip' + (S.station === s.id ? " on" : "") + '" data-st="' + s.id + '">' + s.name + "</button>"; }).join("");
   function lane(cls, title, list, emptyTxt){
     return '<div class="lane ' + cls + '"><h3>' + title + "<b>" + list.length + '</b></h3><div class="cards">' + (list.length ? map(list, function(o){ return cardHtml(o, cls); }).join("") : '<div class="empty">' + emptyTxt + "</div>") + "</div></div>";
   }
