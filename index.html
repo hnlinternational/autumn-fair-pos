@@ -236,7 +236,7 @@ var URL_BASE = (CFG.supabaseUrl || "").replace(/\/$/, "");
 var KEY = CFG.supabaseKey || "";
 var REMOTE = !!(URL_BASE && KEY);
 var POLL_MS = 2000;
-var APP_VERSION = "202610301459"; /* version.txt와 같아야 해요. 다르면 패드가 알아서 새로고침해요 */
+var APP_VERSION = "202610301533"; /* version.txt와 같아야 해요. 다르면 패드가 알아서 새로고침해요 */
 
 var STATIONS = [{id:"bul",name:"불고기",c:"#8C3B22"},{id:"tteok",name:"떡볶이",c:"#D23B3B"},{id:"hot",name:"핫도그",c:"#C8901A"},{id:"etc",name:"기타 음식",c:"#5B6C9A"},{id:"drink",name:"음료",c:"#1F7F86"}];
 var ST = {}; for (var si=0; si<STATIONS.length; si++) ST[STATIONS[si].id] = STATIONS[si];
@@ -521,7 +521,8 @@ function defaultStart(){ var d = {}, c = CFG.startCash || BUILTIN_START; for (va
 var CASH = lsGet("pos.cash", {start:{}, end:{}});
 (function(){ var any = false; for (var k in CASH.start) if (Number(CASH.start[k]) > 0) any = true; if (!any) CASH.start = defaultStart(); })();
 /* 이 패드에만 있는 것(돈통 개수, 담던 주문)을 지워요. 다른 패드가 '모두 초기화'하면 여기서도 자동으로 불려요 */
-function clearLocal(){ CASH = {start:defaultStart(), end:{}}; lsSet("pos.cash", CASH); S.cart = {}; S.floatCash = 0; S.confirmCancel = null; }
+function clearLocal(){ CASH = {start:defaultStart(), end:{}}; lsSet("pos.cash", CASH); S.cart = {}; S.floatCash = cashSum("start"); S.confirmCancel = null; }
+function sameAsDefault(){ return JSON.stringify(CASH.start) === JSON.stringify(defaultStart()); }
 function cashSum(which){ var t = 0; each(DENOMS, function(d){ t += d.v * (Number(CASH[which][d.v]) || 0); }); return t; }
 function cashUsed(which){ for (var k in CASH[which]) if (Number(CASH[which][k]) > 0) return true; return false; }
 function startCash(){ return cashUsed("start") ? cashSum("start") : S.floatCash; }
@@ -543,7 +544,9 @@ function cashPanel(rev){
     var diff = cashSum("end") - expect;
     h += '<div class="diff ' + (diff === 0 ? "ok" : diff > 0 ? "over" : "short") + '">' + (diff === 0 ? "딱 맞아요" : diff > 0 ? "돈이 남아요" : "돈이 모자라요") + "<b>" + (diff > 0 ? "+" : "") + nt(diff) + "</b></div>";
   }
-  return h + '<p class="note" style="margin-top:10px"><button class="copy" id="cash-clear" style="margin:0">돈통 칸 비우기</button></p></div>';
+  var defSum = 0, dd = defaultStart(); for (var dk in dd) defSum += Number(dk) * dd[dk];
+  return h + '<p class="note" style="margin-top:10px">' + (sameAsDefault() ? "" : '<button class="copy" id="cash-default" style="margin:0 6px 6px 0">시작 잔돈 ' + nt(defSum) + " 다시 넣기</button>") +
+    '<button class="copy" id="cash-clear" style="margin:0 0 6px 0">마감 칸 비우기</button></p></div>';
 }
 function salesData(){
   var ok = filter(S.orders, function(o){ return o.status !== "cancelled"; }), rev = 0, per = {}, order = [];
@@ -625,7 +628,8 @@ document.addEventListener("click", function(e){
   if (g("cxno")){ S.confirmCancel = null; render(); return; }
   if (g("cx")){ S.confirmCancel = null; upd(idOf(g("cx")), {status:"cancelled"}); return; }
   if (b.id === "copy"){ copySummary(b); return; }
-  if (b.id === "cash-clear"){ if (b.getAttribute("data-sure")){ CASH = {start:{}, end:{}}; lsSet("pos.cash", CASH); render(); } else { b.setAttribute("data-sure", "1"); b.innerHTML = "한 번 더 누르면 비워요"; } return; }
+  if (b.id === "cash-clear"){ if (b.getAttribute("data-sure")){ CASH.end = {}; lsSet("pos.cash", CASH); render(); } else { b.setAttribute("data-sure", "1"); b.innerHTML = "한 번 더 누르면 비워요"; } return; }
+  if (b.id === "cash-default"){ CASH.start = defaultStart(); lsSet("pos.cash", CASH); S.floatCash = cashSum("start"); store.setConfig(S.menu, S.floatCash); render(); toast("시작 잔돈을 다시 넣었어요"); return; }
   if (b.id === "btn-settings"){ openSettings(); return; }
 });
 document.addEventListener("change", function(e){
@@ -704,7 +708,7 @@ function openSettings(){
         S.menu = draft; each(keys(S.cart), function(k){ if (!menuById(keyId(k))) delete S.cart[k]; }); close(); toast("메뉴를 저장했어요"); }); return; }
     if (b.id === "m-reset"){ if (b.className === "dis") return; b.innerHTML = "삭제 중…";
       store.reset(function(err){ if (err){ toast("지우지 못했어요. 인터넷을 확인하고 다시 해 주세요."); b.innerHTML = "모두 초기화"; return; }
-        clearLocal(); store.setConfig(S.menu, 0); S.orders = []; knownIds = {}; close(); toast("모두 초기화했어요. 다음 주문은 #1이에요"); poll(); }); }
+        clearLocal(); store.setConfig(S.menu, S.floatCash); S.orders = []; knownIds = {}; close(); toast("모두 초기화했어요. 다음 주문은 #1이에요"); poll(); }); }
   };
 }
 
