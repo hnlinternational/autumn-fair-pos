@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#3B2A20">
+<title>Autumn Fair 커피 주문</title>
+<style>
+/* 오래된 휴대폰 브라우저도 되도록 단순한 CSS만 써요 */
+:root{--bg:#F6F1EA;--card:#FFFFFF;--ink:#2A1F18;--muted:#7A6A5E;--line:#E2D7CA;--brown:#6B4226;--brown-soft:#F0E3D3;--ice:#1F6F9A;--ice-soft:#DCEEF8;--hot:#C2452B;--hot-soft:#FBE3DC;--ok:#1F8A4C;--ok-soft:#DDF1E4}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:#F6F1EA;background:var(--bg);color:#2A1F18;color:var(--ink);font-family:"Noto Sans KR","Apple SD Gothic Neo","Malgun Gothic",Roboto,sans-serif;font-size:16px;-webkit-tap-highlight-color:transparent}
+button{font:inherit;color:inherit;border:0;background:none;padding:0;cursor:pointer}
+input{font:inherit}
+.wrap{max-width:640px;margin:0 auto;padding:16px 16px 40px}
+h1{font-size:26px;margin:6px 0 2px}
+.sub{color:var(--muted);font-size:14px;margin:0 0 16px}
+.pill{display:inline-block;font-size:12px;font-weight:700;padding:5px 10px;border-radius:999px;margin-left:6px;vertical-align:middle}
+.pill.live{background:var(--ok-soft);color:var(--ok)} .pill.err{background:#F8DEDA;color:#C2362B} .pill.wait{background:var(--brown-soft);color:var(--brown)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:14px}
+.step{font-size:13px;font-weight:800;color:var(--brown);letter-spacing:.04em;margin-bottom:10px}
+.grid{display:grid;grid-template-columns:1fr 1fr 1fr;grid-gap:8px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;grid-gap:8px}
+.ch{display:block;width:100%;padding:14px 6px;border-radius:12px;border:2px solid var(--line);background:#fff;font-weight:700;font-size:16px;text-align:center;line-height:1.25}
+.ch small{display:block;font-size:11px;font-weight:600;color:var(--muted);margin-top:3px}
+.ch.on{border-color:var(--brown);background:var(--brown);color:#fff}
+.ch.on small{color:#F0E3D3}
+.ch.done{border-color:var(--ok)}
+.ch.done small{color:var(--ok)}
+.ch.on.done small{color:#DDF1E4}
+.temp .ch{padding:18px 6px;font-size:19px}
+.temp .ice.on{background:var(--ice);border-color:var(--ice)}
+.temp .hot.on{background:var(--hot);border-color:var(--hot)}
+.temp .ch.dis{opacity:.35}
+.txt{width:100%;padding:13px;border-radius:12px;border:2px solid var(--line);background:#fff;font-size:16px;margin-top:8px}
+.go{display:block;width:100%;padding:18px;border-radius:14px;background:var(--brown);color:#fff;font-size:19px;font-weight:800}
+.go.dis{opacity:.4}
+.ghost{display:block;margin:12px auto 0;color:var(--muted);font-size:14px;text-decoration:underline}
+.mine{background:var(--ok-soft);color:var(--ok);border-radius:12px;padding:12px 14px;font-weight:700;margin-bottom:12px}
+.sumrow{overflow:hidden;padding:10px 0;border-bottom:1px solid var(--line)}
+.sumrow b{float:right;font-size:20px}
+.sumrow .who{display:block;font-size:13px;color:var(--muted);margin-top:3px;clear:both}
+.tag{display:inline-block;font-size:12px;font-weight:800;padding:2px 8px;border-radius:6px;margin-right:6px;vertical-align:1px}
+.tag.ICE{background:var(--ice-soft);color:var(--ice)} .tag.HOT{background:var(--hot-soft);color:var(--hot)}
+.people{margin-top:10px}
+.pp{overflow:hidden;padding:8px 0;border-bottom:1px dashed var(--line);font-size:15px}
+.pp span{float:right;color:var(--muted);text-align:right;max-width:65%}
+.pp.no span{color:#C2362B;font-weight:700}
+.tools{margin-top:12px}
+.tools button{padding:11px 14px;border-radius:10px;background:var(--brown-soft);color:var(--brown);font-weight:800;font-size:14px;margin:0 6px 6px 0}
+.tools .danger{background:#F8DEDA;color:#C2362B}
+textarea.copied{width:100%;height:170px;margin-top:8px}
+.toast{position:fixed;left:50%;bottom:24px;-webkit-transform:translateX(-50%);transform:translateX(-50%);background:var(--ink);color:#fff;padding:14px 20px;border-radius:14px;font-weight:700;z-index:9;white-space:nowrap}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>☕ 커피 주문 <span id="sync" class="pill wait">연결 중…</span></h1>
+  <p class="sub">Autumn Fair 봉사자분들 커피예요. 이름 누르고, 메뉴 고르고, 저장만 누르면 끝!</p>
+  <div id="app"></div>
+</div>
+<script src="config.js?v=202610301300"></script>
+<script>
+(function(){
+"use strict";
+var CFG = window.FAIR_CONFIG || {};
+var URL_BASE = (CFG.supabaseUrl || "").replace(/\/$/, ""), KEY = CFG.supabaseKey || "";
+var PEOPLE = ["전채련","이해니","김미성","남소라","윤지현","최솔비","정여미","김나연","김미나","김은미","안상현"];
+var DRINKS = [
+  {n:"아메리카노", t:"both"}, {n:"카페라떼", t:"both"}, {n:"바닐라라떼", t:"both"},
+  {n:"카푸치노", t:"hot"}, {n:"카라멜마끼아또", t:"both"}, {n:"녹차라떼", t:"both"},
+  {n:"초코", t:"both"}, {n:"밀크티", t:"both"}, {n:"차 (티)", t:"both"},
+  {n:"디카페인 아메리카노", t:"both"}, {n:"생수", t:"none"}, {n:"안 마셔요", t:"none"}
+];
+var S = {orders:{}, me: lsGet("coffee.me", ""), drink:"", temp:"", custom:"", memo:"", editing:false, live:false, confirmClear:false};
+
+function lsGet(k,d){ try{ var v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); }catch(e){ return d; } }
+function lsSet(k,v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
+function esc(s){ return String(s == null ? "" : s).replace(/[&<>"']/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
+function each(a,f){ for (var i=0;i<a.length;i++) f(a[i],i); }
+function trim(v){ return String(v).replace(/^\s+|\s+$/g, ""); }
+function drinkInfo(n){ for (var i=0;i<DRINKS.length;i++) if (DRINKS[i].n === n) return DRINKS[i]; return {n:n, t:"both"}; }
+
+function api(method, path, body, cb, prefer){
+  var x = new XMLHttpRequest();
+  x.open(method, URL_BASE + "/rest/v1/" + path, true);
+  x.setRequestHeader("apikey", KEY);
+  if (KEY.indexOf("sb_") !== 0) x.setRequestHeader("Authorization", "Bearer " + KEY);
+  x.setRequestHeader("Content-Type", "application/json");
+  if (prefer) x.setRequestHeader("Prefer", prefer);
+  x.onreadystatechange = function(){
+    if (x.readyState !== 4) return;
+    var ok = x.status >= 200 && x.status < 300, data = null;
+    try { data = x.responseText ? JSON.parse(x.responseText) : null; } catch(e){}
+    cb && cb(ok ? null : (x.status || "network"), data);
+  };
+  x.send(body == null ? null : JSON.stringify(body));
+}
+function setSync(m){ var el = document.getElementById("sync");
+  if (m === "live"){ el.className = "pill live"; el.innerHTML = "● 실시간"; }
+  else if (m === "table"){ el.className = "pill err"; el.innerHTML = "● 준비 안 됨"; }
+  else { el.className = "pill err"; el.innerHTML = "● 연결 끊김"; } }
+var missingTable = false;
+function load(){
+  if (!URL_BASE){ setSync("err"); return; }
+  api("GET", "fair_coffee?select=*&order=updated_at.asc", null, function(err, rows){
+    if (err){ missingTable = err === 404; setSync(missingTable ? "table" : "err"); if (missingTable) render(); return; }
+    missingTable = false; setSync("live");
+    var o = {}; each(rows || [], function(r){ o[r.name] = r; });
+    var changed = JSON.stringify(o) !== JSON.stringify(S.orders);
+    S.orders = o;
+    if (changed && !typing()) render();
+  });
+}
+function typing(){ var a = document.activeElement; return a && (a.tagName === "INPUT" || a.tagName === "TEXTAREA"); }
+
+function label(r){ return (r.temp === "ICE" ? "아이스 " : r.temp === "HOT" ? "핫 " : "") + r.drink + (r.memo ? " (" + r.memo + ")" : ""); }
+
+function render(){
+  var A = document.getElementById("app"), h = "";
+  if (missingTable){ A.innerHTML = '<div class="card">커피 주문 표가 아직 준비되지 않았어요. 담당자가 Supabase에서 coffee.sql을 한 번 실행하면 바로 쓸 수 있어요.</div>'; return; }
+  var mine = S.me && S.orders[S.me];
+  // 1. 이름
+  h += '<div class="card"><div class="step">1. 내 이름</div><div class="grid">';
+  each(PEOPLE, function(p){ var o = S.orders[p];
+    h += '<button class="ch' + (S.me === p ? " on" : "") + (o ? " done" : "") + '" data-me="' + esc(p) + '">' + esc(p) + "<small>" + (o ? "✓ 주문함" : "&nbsp;") + "</small></button>"; });
+  h += "</div></div>";
+  if (S.me){
+    if (mine && !S.editing){
+      h += '<div class="card"><div class="mine">✓ ' + esc(S.me) + "님 주문: " + esc(label(mine)) + '</div><button class="go" id="edit">바꾸기</button></div>';
+    } else {
+      var info = drinkInfo(S.drink), needTemp = S.drink && info.t !== "none";
+      h += '<div class="card"><div class="step">2. 메뉴</div><div class="grid">';
+      each(DRINKS, function(d){ h += '<button class="ch' + (S.drink === d.n ? " on" : "") + '" data-drink="' + esc(d.n) + '">' + esc(d.n) + "</button>"; });
+      h += '</div><input class="txt" id="custom" placeholder="찾는 메뉴가 없으면 여기에 적어요 (예: 자몽에이드)" value="' + esc(S.custom) + '"></div>';
+      h += '<div class="card temp"><div class="step">3. 아이스 / 핫</div><div class="grid2">' +
+        '<button class="ch ice' + (S.temp === "ICE" ? " on" : "") + (needTemp && info.t !== "hot" || !S.drink ? "" : " dis") + '" data-temp="ICE">🧊 아이스</button>' +
+        '<button class="ch hot' + (S.temp === "HOT" ? " on" : "") + (needTemp || !S.drink ? "" : " dis") + '" data-temp="HOT">🔥 핫</button></div>' +
+        '<input class="txt" id="memo" placeholder="요청사항 (예: 샷 추가, 연하게, 우유 오트로)" value="' + esc(S.memo) + '"></div>';
+      var ready = S.drink && (!needTemp || S.temp);
+      h += '<button class="go' + (ready ? "" : " dis") + '" id="save">' + (ready ? "저장하기" : (S.drink ? "아이스/핫을 골라 주세요" : "메뉴를 골라 주세요")) + "</button>";
+      if (mine) h += '<button class="ghost" id="cancel-edit">바꾸지 않을래요</button>';
+    }
+  }
+  // 모아보기
+  var groups = {}, order = [], cnt = 0;
+  for (var nm in S.orders){ var r = S.orders[nm]; if (r.drink === "안 마셔요") continue; cnt++;
+    var k = (r.temp ? r.temp + "|" : "|") + r.drink + (r.memo ? " · " + r.memo : "");
+    if (!groups[k]){ groups[k] = {r:r, names:[]}; order.push(k); } groups[k].names.push(nm); }
+  order.sort(function(a,b){ return groups[b].names.length - groups[a].names.length; });
+  h += '<div class="card"><div class="step">모아보기 · 총 ' + cnt + "잔</div>";
+  if (!order.length) h += '<p class="sub" style="margin:0">아직 주문이 없어요.</p>';
+  each(order, function(k){ var g = groups[k], r = g.r;
+    h += '<div class="sumrow">' + (r.temp ? '<span class="tag ' + r.temp + '">' + (r.temp === "ICE" ? "아이스" : "핫") + "</span>" : "") + esc(r.drink) + (r.memo ? " · " + esc(r.memo) : "") +
+      "<b>" + g.names.length + '잔</b><span class="who">' + esc(g.names.join(", ")) + "</span></div>"; });
+  h += '<div class="people">';
+  each(PEOPLE, function(p){ var o = S.orders[p]; h += '<div class="pp' + (o ? "" : " no") + '">' + esc(p) + "<span>" + (o ? esc(label(o)) : "아직") + "</span></div>"; });
+  h += '</div><div class="tools"><button id="copy">카페 주문용 복사</button><button class="danger" id="clear">' + (S.confirmClear ? "한 번 더 누르면 전부 지워요" : "전체 비우기") + '</button></div><div id="copyout"></div></div>';
+  A.innerHTML = h;
+}
+
+function toast(t){ var d = document.createElement("div"); d.className = "toast"; d.innerHTML = t; document.body.appendChild(d); setTimeout(function(){ if (d.parentNode) d.parentNode.removeChild(d); }, 2200); }
+function startEdit(){ var m = S.orders[S.me]; S.editing = true; S.drink = ""; S.temp = ""; S.custom = ""; S.memo = "";
+  if (m){ var known = false; each(DRINKS, function(d){ if (d.n === m.drink) known = true; }); if (known) S.drink = m.drink; else S.custom = m.drink; S.temp = m.temp; S.memo = m.memo; } }
+function syncInputs(){ var c = document.getElementById("custom"), m = document.getElementById("memo"); if (c) S.custom = trim(c.value); if (m) S.memo = trim(m.value); }
+
+/* 글자 입력 중에는 화면을 다시 그리지 않고 버튼 상태만 바꿔요 (다시 그리면 저장 버튼 누른 게 씹혀요) */
+function refreshSave(){
+  var sv = document.getElementById("save"); if (!sv) return;
+  var drink = S.custom || S.drink, info = drinkInfo(drink), needTemp = drink && info.t !== "none", ready = drink && (!needTemp || S.temp);
+  sv.className = "go" + (ready ? "" : " dis");
+  sv.innerHTML = ready ? "저장하기" : (drink ? "아이스/핫을 골라 주세요" : "메뉴를 골라 주세요");
+}
+document.addEventListener("input", function(e){
+  if (e.target.id === "custom"){ S.custom = trim(e.target.value);
+    if (S.custom){ S.drink = ""; var ons = document.querySelectorAll("[data-drink].on"); each(ons, function(x){ x.className = x.className.replace(" on", ""); }); }
+    refreshSave(); }
+  if (e.target.id === "memo") S.memo = trim(e.target.value);
+});
+document.addEventListener("click", function(e){
+  var b = e.target; while (b && b.tagName !== "BUTTON") b = b.parentNode; if (!b || !b.getAttribute) return;
+  var g = function(k){ return b.getAttribute("data-" + k); };
+  if (g("me")){ S.me = g("me"); lsSet("coffee.me", S.me); S.editing = false; S.drink = ""; S.temp = ""; S.custom = ""; S.memo = ""; render(); return; }
+  if (g("drink")){ syncInputs(); S.drink = g("drink"); S.custom = ""; var t = drinkInfo(S.drink).t; if (t === "none") S.temp = ""; if (t === "hot") S.temp = "HOT"; render(); return; }
+  if (g("temp")){ syncInputs(); if (b.className.indexOf("dis") >= 0) return; S.temp = g("temp"); render(); return; }
+  if (b.id === "edit"){ startEdit(); render(); return; }
+  if (b.id === "cancel-edit"){ S.editing = false; render(); return; }
+  if (b.id === "save"){ syncInputs(); var drink = S.custom || S.drink, info = drinkInfo(drink), needTemp = info.t !== "none";
+    if (!drink || (needTemp && !S.temp)) return;
+    var row = {name:S.me, drink:drink, temp: needTemp ? S.temp : "", memo:S.memo, updated_at:new Date().toISOString()};
+    b.innerHTML = "저장 중…";
+    api("POST", "fair_coffee?on_conflict=name", row, function(err){
+      if (err){ toast("저장하지 못했어요. 다시 눌러 주세요."); render(); return; }
+      S.orders[S.me] = row; S.editing = false; render(); toast("저장했어요 ☕"); load();
+    }, "resolution=merge-duplicates,return=minimal"); return; }
+  if (b.id === "copy"){ var lines = ["[Autumn Fair 커피 주문]"], tot = 0, grp = {}, ord = [];
+    for (var nm in S.orders){ var r = S.orders[nm]; if (r.drink === "안 마셔요") continue; tot++; var k = (r.temp === "ICE" ? "아이스 " : r.temp === "HOT" ? "핫 " : "") + r.drink + (r.memo ? " (" + r.memo + ")" : ""); if (!grp[k]){ grp[k] = 0; ord.push(k); } grp[k]++; }
+    each(ord, function(k){ lines.push("▪ " + k + " " + grp[k] + "잔"); }); lines.push("총 " + tot + "잔");
+    var txt = lines.join("\n"), done = function(){ toast("복사했어요"); };
+    var fb = function(){ var out = document.getElementById("copyout"); out.innerHTML = '<textarea class="copied" readonly></textarea>'; var ta = out.firstChild; ta.value = txt; ta.focus(); ta.select(); var ok = false; try { ok = document.execCommand("copy"); } catch(x){} if (ok) done(); };
+    try { if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(done, fb); else fb(); } catch(x){ fb(); } return; }
+  if (b.id === "clear"){ if (!S.confirmClear){ S.confirmClear = true; render(); return; } S.confirmClear = false;
+    api("DELETE", "fair_coffee?name=not.is.null", null, function(err){ if (err){ toast("지우지 못했어요"); return; } S.orders = {}; render(); toast("전부 비웠어요"); }); return; }
+});
+
+render(); load(); setInterval(load, 3000);
+})();
+</script>
+</body>
+</html>
