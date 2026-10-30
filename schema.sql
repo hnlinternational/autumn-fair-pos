@@ -22,6 +22,7 @@ create table if not exists public.fair_config (
   updated_at timestamptz not null default now()
 );
 alter table public.fair_config add column if not exists reset_at timestamptz not null default now();
+alter table public.fair_config add column if not exists cash jsonb not null default '{}'::jsonb;
 create index if not exists fair_orders_updated_idx on public.fair_orders(updated_at);
 
 create or replace function public.fair_touch() returns trigger language plpgsql as $$

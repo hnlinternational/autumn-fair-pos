@@ -226,7 +226,7 @@ textarea.copied{width:100%;height:160px;margin-top:8px;-webkit-user-select:text;
 </div>
 <div id="overlay"></div>
 
-<script src="config.js?v=202610292003"></script>
+<script src="config.js?v=202610302312"></script>
 <script>
 /* ES5만 사용 (화살표 함수, 템플릿 문자열, async 없음) — 오래된 갤럭시탭 크롬 호환용 */
 (function(){
@@ -236,7 +236,7 @@ var URL_BASE = (CFG.supabaseUrl || "").replace(/\/$/, "");
 var KEY = CFG.supabaseKey || "";
 var REMOTE = !!(URL_BASE && KEY);
 var POLL_MS = 2000;
-var APP_VERSION = "202610301533"; /* version.txt와 같아야 해요. 다르면 패드가 알아서 새로고침해요 */
+var APP_VERSION = "202610302312"; /* version.txt와 같아야 해요. 다르면 패드가 알아서 새로고침해요 */
 
 var STATIONS = [{id:"bul",name:"불고기",c:"#8C3B22"},{id:"tteok",name:"떡볶이",c:"#D23B3B"},{id:"hot",name:"핫도그",c:"#C8901A"},{id:"etc",name:"기타 음식",c:"#5B6C9A"},{id:"drink",name:"음료",c:"#1F7F86"}];
 var ST = {}; for (var si=0; si<STATIONS.length; si++) ST[STATIONS[si].id] = STATIONS[si];
@@ -293,12 +293,15 @@ function rowToOrder(r){ return {id:r.id, no:r.no, items:r.items||[], total:r.tot
 var local = { orders: lsGet("pos.local.orders", []), cfg: lsGet("pos.local.cfg", null) };
 function saveLocal(){ lsSet("pos.local.orders", local.orders); lsSet("pos.local.cfg", local.cfg); }
 
-var sync = { since: null, resetAt: null, lastFull: 0, rows: {} };
+var sync = { since: null, resetAt: null, lastFull: 0, rows: {}, cashCol: null }; /* cashCol: 서버에 돈통 칸(cash)이 있는지 */
 var store = REMOTE ? {
   /* 데이터 절약: 평소엔 바뀐 주문만 받고, 1분마다 한 번 전체를 다시 받아요 */
   load: function(cb){
-    api("GET", "fair_config?select=menu,float_cash,reset_at&id=eq.1", null, function(err0, cfgRows){
+    var cq = "fair_config?select=menu,float_cash,reset_at" + (sync.cashCol === false ? "" : ",cash") + "&id=eq.1";
+    api("GET", cq, null, function(err0, cfgRows){
+      if (err0 === 400 && sync.cashCol !== false){ sync.cashCol = false; return store.load(cb); }
       if (err0) return cb(err0);
+      if (sync.cashCol === null) sync.cashCol = true;
       var cfg = cfgRows && cfgRows[0] ? cfgRows[0] : null;
       var full = !sync.since || Date.now() - sync.lastFull > 60000 || (cfg && cfg.reset_at !== sync.resetAt);
       var q = "fair_orders?select=*&order=id.asc";
@@ -306,7 +309,7 @@ var store = REMOTE ? {
       api("GET", q, null, function(err, rows){
         if (err) return cb(err);
         if (full){ sync.rows = {}; sync.lastFull = Date.now(); }
-        if (cfg){ if (sync.resetAt && cfg.reset_at !== sync.resetAt) clearLocal(); sync.resetAt = cfg.reset_at; }
+        if (cfg){ if (sync.resetAt && cfg.reset_at !== sync.resetAt) clearLocal(); sync.resetAt = cfg.reset_at; if (sync.cashCol) applyRemoteCash(cfg.cash); }
         each(rows || [], function(r){ sync.rows[r.id] = r; if (!sync.since || r.updated_at > sync.since) sync.since = r.updated_at; });
         if (!sync.since) sync.since = new Date().toISOString();
         var list = map(keys(sync.rows), function(k){ return rowToOrder(sync.rows[k]); });
@@ -322,6 +325,7 @@ var store = REMOTE ? {
   },
   update: function(id, patch, cb){ api("PATCH", "fair_orders?id=eq." + encodeURIComponent(id), patch, function(err){ cb && cb(err); }, "return=minimal"); },
   setConfig: function(menu, floatCash, cb){ api("PATCH", "fair_config?id=eq.1", {menu:menu, float_cash:floatCash}, function(err){ cb && cb(err); }, "return=minimal"); },
+  setCash: function(cash, floatCash, cb){ if (!sync.cashCol){ cb && cb(null); return; } api("PATCH", "fair_config?id=eq.1", {cash:cash, float_cash:floatCash}, function(err){ cb && cb(err); }, "return=minimal"); },
   reset: function(cb){ api("POST", "rpc/fair_reset", {}, function(err){ if (!err){ sync.since = null; sync.rows = {}; } cb && cb(err); }); }
 } : {
   load: function(cb){ cb(null, local.orders.slice(), local.cfg); },
@@ -332,6 +336,7 @@ var store = REMOTE ? {
   },
   update: function(id, patch, cb){ each(local.orders, function(o){ if (o.id === id) assign(o, patch); }); saveLocal(); cb && cb(null); },
   setConfig: function(menu, floatCash, cb){ local.cfg = {menu:menu, float_cash:floatCash}; saveLocal(); cb && cb(null); },
+  setCash: function(cash, floatCash, cb){ cb && cb(null); },
   reset: function(cb){ local.orders = []; saveLocal(); cb && cb(null); }
 };
 
@@ -522,6 +527,15 @@ var CASH = lsGet("pos.cash", {start:{}, end:{}});
 (function(){ var any = false; for (var k in CASH.start) if (Number(CASH.start[k]) > 0) any = true; if (!any) CASH.start = defaultStart(); })();
 /* 이 패드에만 있는 것(돈통 개수, 담던 주문)을 지워요. 다른 패드가 '모두 초기화'하면 여기서도 자동으로 불려요 */
 function clearLocal(){ CASH = {start:defaultStart(), end:{}}; lsSet("pos.cash", CASH); S.cart = {}; S.floatCash = cashSum("start"); S.confirmCancel = null; }
+/* 돈통 칸을 모든 기기와 공유해요. 서버가 비어 있으면, 이 기기에 직접 적은 값이 있을 때만 올려요 */
+function hasCash(c){ return !!c && (function(){ for (var w in {start:1, end:1}) for (var k in (c[w] || {})) if (Number(c[w][k]) > 0) return true; return false; })(); }
+function pushCash(){ lsSet("pos.cash", CASH); S.floatCash = cashSum("start"); store.setCash(CASH, S.floatCash, function(err){ if (err) toast("돈통 칸을 공유하지 못했어요. 인터넷을 확인해 주세요."); }); }
+function applyRemoteCash(rc){
+  if (hasCash(rc)){
+    var next = {start: rc.start || {}, end: rc.end || {}};
+    if (JSON.stringify(next) !== JSON.stringify(CASH) && !isTyping()){ CASH = next; lsSet("pos.cash", CASH); S.floatCash = cashSum("start"); if (S.view === "sales") render(); }
+  } else if (cashUsed("end") || !sameAsDefault()){ pushCash(); }
+}
 function sameAsDefault(){ return JSON.stringify(CASH.start) === JSON.stringify(defaultStart()); }
 function cashSum(which){ var t = 0; each(DENOMS, function(d){ t += d.v * (Number(CASH[which][d.v]) || 0); }); return t; }
 function cashUsed(which){ for (var k in CASH[which]) if (Number(CASH[which][k]) > 0) return true; return false; }
@@ -628,8 +642,8 @@ document.addEventListener("click", function(e){
   if (g("cxno")){ S.confirmCancel = null; render(); return; }
   if (g("cx")){ S.confirmCancel = null; upd(idOf(g("cx")), {status:"cancelled"}); return; }
   if (b.id === "copy"){ copySummary(b); return; }
-  if (b.id === "cash-clear"){ if (b.getAttribute("data-sure")){ CASH.end = {}; lsSet("pos.cash", CASH); render(); } else { b.setAttribute("data-sure", "1"); b.innerHTML = "한 번 더 누르면 비워요"; } return; }
-  if (b.id === "cash-default"){ CASH.start = defaultStart(); lsSet("pos.cash", CASH); S.floatCash = cashSum("start"); store.setConfig(S.menu, S.floatCash); render(); toast("시작 잔돈을 다시 넣었어요"); return; }
+  if (b.id === "cash-clear"){ if (b.getAttribute("data-sure")){ CASH.end = {}; pushCash(); render(); } else { b.setAttribute("data-sure", "1"); b.innerHTML = "한 번 더 누르면 비워요"; } return; }
+  if (b.id === "cash-default"){ CASH.start = defaultStart(); pushCash(); render(); toast("시작 잔돈을 다시 넣었어요"); return; }
   if (b.id === "btn-settings"){ openSettings(); return; }
 });
 document.addEventListener("change", function(e){
@@ -637,8 +651,7 @@ document.addEventListener("change", function(e){
   var ck = e.target.getAttribute && e.target.getAttribute("data-cash");
   if (ck){ var p2 = ck.split("|"), n = Math.max(0, Math.floor(Number(e.target.value) || 0));
     if (n) CASH[p2[0]][p2[1]] = n; else delete CASH[p2[0]][p2[1]];
-    lsSet("pos.cash", CASH);
-    if (p2[0] === "start"){ S.floatCash = cashSum("start"); store.setConfig(S.menu, S.floatCash); }
+    pushCash();
     render(); }
 });
 function copySummary(b){
@@ -708,7 +721,7 @@ function openSettings(){
         S.menu = draft; each(keys(S.cart), function(k){ if (!menuById(keyId(k))) delete S.cart[k]; }); close(); toast("메뉴를 저장했어요"); }); return; }
     if (b.id === "m-reset"){ if (b.className === "dis") return; b.innerHTML = "삭제 중…";
       store.reset(function(err){ if (err){ toast("지우지 못했어요. 인터넷을 확인하고 다시 해 주세요."); b.innerHTML = "모두 초기화"; return; }
-        clearLocal(); store.setConfig(S.menu, S.floatCash); S.orders = []; knownIds = {}; close(); toast("모두 초기화했어요. 다음 주문은 #1이에요"); poll(); }); }
+        clearLocal(); pushCash(); S.orders = []; knownIds = {}; close(); toast("모두 초기화했어요. 다음 주문은 #1이에요"); poll(); }); }
   };
 }
 
